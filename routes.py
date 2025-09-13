@@ -555,6 +555,315 @@ def api_timeline(reference_number):
     return jsonify(timeline_data)
 
 
+@app.route('/export/data')
+def export_data():
+    """Export tracking data in CSV or Excel format."""
+    import csv
+    import io
+    from flask import make_response
+    from datetime import datetime, timedelta
+    
+    # Get parameters
+    format_type = request.args.get('format', 'csv')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    # Default to last 30 days if no dates provided
+    if not end_date:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+    if not start_date:
+        start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    
+    # Convert to datetime objects
+    start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
+    end_datetime = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+    
+    # Query data
+    records = ReflixTracking.query.filter(
+        ReflixTracking.created_at.between(start_datetime, end_datetime)
+    ).order_by(ReflixTracking.created_at.desc()).all()
+    
+    if format_type == 'csv':
+        # Create CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow([
+            'Reference Number', 'Shipping Unit Ref', 'Status', 'Description',
+            'Location', 'Timestamp', 'Created At', 'Log File'
+        ])
+        
+        # Write data
+        for record in records:
+            writer.writerow([
+                record.reference_number,
+                record.shipping_unit_ref or '',
+                record.status or '',
+                record.description or '',
+                record.location or '',
+                record.timestamp.strftime('%Y-%m-%d %H:%M:%S') if record.timestamp else '',
+                record.created_at.strftime('%Y-%m-%d %H:%M:%S') if record.created_at else '',
+                record.log_file_name or ''
+            ])
+        
+        # Create response
+        response = make_response(output.getvalue())
+        response.headers['Content-Type'] = 'text/csv'
+        response.headers['Content-Disposition'] = f'attachment; filename=refliv_tracking_{start_date}_to_{end_date}.csv'
+        return response
+    
+    elif format_type == 'excel':
+        # Redirect to existing Excel export with parameters
+        return redirect(url_for('export_excel', start_date=start_date, end_date=end_date))
+    
+    return "Invalid format", 400
+
+
+@app.route('/export/summary')
+def export_summary():
+    """Export summary report as CSV."""
+    import csv
+    import io
+    from flask import make_response
+    from datetime import datetime, timedelta
+    
+    # Get parameters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    # Default to last 30 days if no dates provided
+    if not end_date:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+    if not start_date:
+        start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    
+    # Convert to datetime objects
+    start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
+    end_datetime = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+    
+    # Get summary statistics
+    total_records = ReflixTracking.query.filter(
+        ReflixTracking.created_at.between(start_datetime, end_datetime)
+    ).count()
+    
+    unique_references = db.session.query(ReflixTracking.reference_number).filter(
+        ReflixTracking.created_at.between(start_datetime, end_datetime)
+    ).distinct().count()
+    
+    # Status distribution
+    status_data = db.session.query(
+        ReflixTracking.status,
+        func.count(ReflixTracking.id).label('count')
+    ).filter(
+        ReflixTracking.created_at.between(start_datetime, end_datetime)
+    ).group_by(ReflixTracking.status).all()
+    
+    # Create CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write summary information
+    writer.writerow(['REFLIV Tracking Summary Report'])
+    writer.writerow(['Date Range', f'{start_date} to {end_date}'])
+    writer.writerow(['Total Records', total_records])
+    writer.writerow(['Unique References', unique_references])
+    writer.writerow([''])
+    
+    # Write status distribution
+    writer.writerow(['Status Distribution'])
+    writer.writerow(['Status', 'Count', 'Percentage'])
+    for status in status_data:
+        percentage = (status.count / total_records * 100) if total_records > 0 else 0
+        writer.writerow([status.status, status.count, f'{percentage:.1f}%'])
+    
+    # Create response
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = f'attachment; filename=refliv_summary_{start_date}_to_{end_date}.csv'
+    return response
+
+
+@app.route('/export/timeline')
+def export_timeline():
+    """Export timeline data for all references as CSV."""
+    import csv
+    import io
+    from flask import make_response
+    from datetime import datetime, timedelta
+    
+    # Get parameters
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    # Default to last 30 days if no dates provided
+    if not end_date:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+    if not start_date:
+        start_date = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+    
+    # Convert to datetime objects
+    start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
+    end_datetime = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+    
+    # Get timeline data grouped by reference
+    records = ReflixTracking.query.filter(
+        ReflixTracking.created_at.between(start_datetime, end_datetime)
+    ).order_by(ReflixTracking.reference_number, ReflixTracking.timestamp).all()
+    
+    # Create CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write headers
+    writer.writerow([
+        'Reference Number', 'Timeline Position', 'Status', 'Timestamp', 
+        'Description', 'Location', 'Log File'
+    ])
+    
+    # Group by reference and write timeline data
+    current_ref = None
+    timeline_position = 0
+    
+    for record in records:
+        if record.reference_number != current_ref:
+            current_ref = record.reference_number
+            timeline_position = 1
+        else:
+            timeline_position += 1
+        
+        writer.writerow([
+            record.reference_number,
+            timeline_position,
+            record.status or '',
+            record.timestamp.strftime('%Y-%m-%d %H:%M:%S') if record.timestamp else '',
+            record.description or '',
+            record.location or '',
+            record.log_file_name or ''
+        ])
+    
+    # Create response
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = f'attachment; filename=refliv_timeline_{start_date}_to_{end_date}.csv'
+    return response
+
+
+@app.route('/export/custom', methods=['POST'])
+def export_custom():
+    """Custom export with advanced options."""
+    import csv
+    import io
+    from flask import make_response
+    from datetime import datetime, timedelta
+    
+    # Get parameters
+    format_type = request.form.get('format', 'csv')
+    export_type = request.form.get('export_type', 'all')
+    start_date = request.form.get('start_date')
+    end_date = request.form.get('end_date')
+    
+    # Convert to datetime objects
+    start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
+    end_datetime = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+    
+    # Build query based on export type
+    if export_type == 'unique':
+        # Get only unique references (latest status per reference)
+        subquery = db.session.query(
+            ReflixTracking.reference_number,
+            func.max(ReflixTracking.created_at).label('latest_date')
+        ).filter(
+            ReflixTracking.created_at.between(start_datetime, end_datetime)
+        ).group_by(ReflixTracking.reference_number).subquery()
+        
+        records = db.session.query(ReflixTracking).join(
+            subquery,
+            (ReflixTracking.reference_number == subquery.c.reference_number) &
+            (ReflixTracking.created_at == subquery.c.latest_date)
+        ).order_by(ReflixTracking.created_at.desc()).all()
+        
+    elif export_type == 'latest':
+        # Get latest status per reference
+        records = db.session.query(ReflixTracking).filter(
+            ReflixTracking.created_at.between(start_datetime, end_datetime)
+        ).order_by(ReflixTracking.reference_number, ReflixTracking.created_at.desc()).all()
+        
+        # Keep only the latest per reference
+        seen_refs = set()
+        filtered_records = []
+        for record in records:
+            if record.reference_number not in seen_refs:
+                filtered_records.append(record)
+                seen_refs.add(record.reference_number)
+        records = filtered_records
+        
+    elif export_type == 'activity':
+        # Get activity timeline
+        records = ReflixTracking.query.filter(
+            ReflixTracking.created_at.between(start_datetime, end_datetime)
+        ).order_by(ReflixTracking.reference_number, ReflixTracking.timestamp).all()
+        
+    else:  # 'all'
+        records = ReflixTracking.query.filter(
+            ReflixTracking.created_at.between(start_datetime, end_datetime)
+        ).order_by(ReflixTracking.created_at.desc()).all()
+    
+    if format_type == 'json':
+        # Return JSON data
+        data = []
+        for record in records:
+            data.append({
+                'reference_number': record.reference_number,
+                'shipping_unit_ref': record.shipping_unit_ref,
+                'status': record.status,
+                'description': record.description,
+                'location': record.location,
+                'timestamp': record.timestamp.isoformat() if record.timestamp else None,
+                'created_at': record.created_at.isoformat() if record.created_at else None,
+                'log_file_name': record.log_file_name
+            })
+        
+        response = make_response(jsonify(data))
+        response.headers['Content-Disposition'] = f'attachment; filename=refliv_custom_{export_type}_{start_date}_to_{end_date}.json'
+        return response
+    
+    else:  # CSV or Excel
+        # Create CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow([
+            'Reference Number', 'Shipping Unit Ref', 'Status', 'Description',
+            'Location', 'Timestamp', 'Created At', 'Log File'
+        ])
+        
+        # Write data
+        for record in records:
+            writer.writerow([
+                record.reference_number,
+                record.shipping_unit_ref or '',
+                record.status or '',
+                record.description or '',
+                record.location or '',
+                record.timestamp.strftime('%Y-%m-%d %H:%M:%S') if record.timestamp else '',
+                record.created_at.strftime('%Y-%m-%d %H:%M:%S') if record.created_at else '',
+                record.log_file_name or ''
+            ])
+        
+        # Create response
+        response = make_response(output.getvalue())
+        if format_type == 'excel':
+            response.headers['Content-Type'] = 'application/vnd.ms-excel'
+            response.headers['Content-Disposition'] = f'attachment; filename=refliv_custom_{export_type}_{start_date}_to_{end_date}.xls'
+        else:
+            response.headers['Content-Type'] = 'text/csv'
+            response.headers['Content-Disposition'] = f'attachment; filename=refliv_custom_{export_type}_{start_date}_to_{end_date}.csv'
+        
+        return response
+
+
 @app.route('/export.xlsx')
 def export_excel():
     """Export tracking data to Excel with filtering and multiple sheets."""

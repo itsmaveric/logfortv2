@@ -205,6 +205,74 @@
     </div>
 </div>
 
+<!-- Export Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-download me-2"></i>Export Data</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">Export data for the selected date range ({{ start_date }} to {{ end_date }}):</p>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('export_data', format='csv', start_date=start_date, end_date=end_date) }}" 
+                           class="btn btn-outline-success w-100">
+                            <i class="fas fa-file-csv me-2"></i>Export to CSV
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('export_data', format='excel', start_date=start_date, end_date=end_date) }}" 
+                           class="btn btn-outline-primary w-100">
+                            <i class="fas fa-file-excel me-2"></i>Export to Excel
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('export_summary', start_date=start_date, end_date=end_date) }}" 
+                           class="btn btn-outline-info w-100">
+                            <i class="fas fa-chart-pie me-2"></i>Summary Report
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('export_timeline', start_date=start_date, end_date=end_date) }}" 
+                           class="btn btn-outline-warning w-100">
+                            <i class="fas fa-timeline me-2"></i>Timeline Export
+                        </a>
+                    </div>
+                </div>
+                <hr class="my-4">
+                <h6><i class="fas fa-cog me-2"></i>Advanced Export Options</h6>
+                <form method="POST" action="{{ url_for('export_custom') }}" class="row g-3">
+                    <input type="hidden" name="start_date" value="{{ start_date }}">
+                    <input type="hidden" name="end_date" value="{{ end_date }}">
+                    <div class="col-md-4">
+                        <label for="export_format" class="form-label">Format</label>
+                        <select class="form-select" id="export_format" name="format">
+                            <option value="csv">CSV</option>
+                            <option value="excel">Excel</option>
+                            <option value="json">JSON</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="export_type" class="form-label">Data Type</label>
+                        <select class="form-select" id="export_type" name="export_type">
+                            <option value="all">All Records</option>
+                            <option value="unique">Unique References Only</option>
+                            <option value="latest">Latest Status per Reference</option>
+                            <option value="activity">Activity Timeline</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="fas fa-download me-2"></i>Custom Export
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Status Timeline Modal -->
 <div class="modal fade" id="timelineModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
