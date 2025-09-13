@@ -627,6 +627,7 @@ def export_summary():
     import io
     from flask import make_response
     from datetime import datetime, timedelta
+    from sqlalchemy import func
     
     # Get parameters
     start_date = request.args.get('start_date')
