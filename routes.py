@@ -163,6 +163,11 @@ def index():
     
     return render_template('index.html', recent_records=recent_records, stats=stats)
 
+@app.route('/upload/enhanced')
+def enhanced_upload():
+    """Enhanced upload page with directory access and drag-drop for trusted environments."""
+    return render_template('enhanced_upload.html')
+
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':

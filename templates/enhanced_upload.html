@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-upload me-2"></i>Enhanced File Upload</h1>
+        <p class="lead">Advanced file access for trusted environments and bulk processing.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-folder-open me-2"></i>Directory Access (Modern Browsers)</h5>
+            </div>
+            <div class="card-body">
+                <p>Select entire directories for bulk processing (Chrome 86+, Edge 86+)</p>
+                <button id="selectDirectory" class="btn btn-primary">
+                    <i class="fas fa-folder me-2"></i>Select Log Directory
+                </button>
+                <div id="directoryStatus" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-drag-drop me-2"></i>Drag & Drop Zone</h5>
+            </div>
+            <div class="card-body">
+                <div id="dropZone" class="border border-dashed p-4 text-center" style="min-height: 150px;">
+                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">Drag and drop log files or folders here</p>
+                    <p class="small text-muted">Supports .txt, .log files</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list me-2"></i>Processing Queue</h5>
+            </div>
+            <div class="card-body">
+                <div id="processingQueue"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Modern File System Access API for trusted environments
+async function selectDirectory() {
+    if ('showDirectoryPicker' in window) {
+        try {
+            const directoryHandle = await window.showDirectoryPicker();
+            await processDirectory(directoryHandle);
+        } catch (err) {
+            console.error('Directory selection cancelled or failed:', err);
+        }
+    } else {
+        alert('Directory access not supported in this browser. Use Chrome 86+ or Edge 86+');
+    }
+}
+
+async function processDirectory(directoryHandle) {
+    const statusDiv = document.getElementById('directoryStatus');
+    statusDiv.innerHTML = '<div class="alert alert-info">Processing directory: ' + directoryHandle.name + '</div>';
+    
+    let fileCount = 0;
+    for await (const entry of directoryHandle.values()) {
+        if (entry.kind === 'file' && (entry.name.endsWith('.txt') || entry.name.endsWith('.log'))) {
+            const file = await entry.getFile();
+            await uploadFile(file);
+            fileCount++;
+        }
+    }
+    
+    statusDiv.innerHTML = '<div class="alert alert-success">Processed ' + fileCount + ' files from directory: ' + directoryHandle.name + '</div>';
+}
+
+// Drag and Drop functionality
+const dropZone = document.getElementById('dropZone');
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('border-primary', 'bg-light');
+});
+
+dropZone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-primary', 'bg-light');
+});
+
+dropZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('border-primary', 'bg-light');
+    
+    const items = e.dataTransfer.items;
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+            const file = item.getAsFile();
+            if (file.name.endsWith('.txt') || file.name.endsWith('.log')) {
+                await uploadFile(file);
+            }
+        }
+    }
+});
+
+// File upload function
+async function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const queueDiv = document.getElementById('processingQueue');
+    const fileItem = document.createElement('div');
+    fileItem.className = 'alert alert-info';
+    fileItem.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading: ' + file.name;
+    queueDiv.appendChild(fileItem);
+    
+    try {
+        const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            fileItem.className = 'alert alert-success';
+            fileItem.innerHTML = '<i class="fas fa-check me-2"></i>Processed: ' + file.name;
+        } else {
+            fileItem.className = 'alert alert-danger';
+            fileItem.innerHTML = '<i class="fas fa-times me-2"></i>Failed: ' + file.name;
+        }
+    } catch (error) {
+        fileItem.className = 'alert alert-danger';
+        fileItem.innerHTML = '<i class="fas fa-times me-2"></i>Error uploading: ' + file.name;
+    }
+}
+
+// Event listeners
+document.getElementById('selectDirectory').addEventListener('click', selectDirectory);
+</script>
+{% endblock %}
