@@ -39,14 +39,15 @@ class DesktopConfig:
     def load_config(self):
         """Load or create configuration file"""
         default_config = {
-            'admin_password': 'admin123',
+            'admin_password_hash': None,  # Will be set on first run
             'port': 5000,
             'host': '127.0.0.1',
             'monitored_folders': [],
             'database_url': f'sqlite:///{self.db_file}',
             'secret_key': self._generate_secret_key(),
             'monitor_interval': 10,
-            'auto_start_monitor': False
+            'auto_start_monitor': False,
+            'first_run': True
         }
         
         if self.config_file.exists():
@@ -81,6 +82,24 @@ class DesktopConfig:
         """Generate a random secret key"""
         import secrets
         return secrets.token_hex(32)
+    
+    def set_admin_password(self, password):
+        """Set admin password with proper hashing"""
+        from werkzeug.security import generate_password_hash
+        self.config['admin_password_hash'] = generate_password_hash(password)
+        self.config['first_run'] = False
+        self.save_config()
+    
+    def verify_admin_password(self, password):
+        """Verify admin password"""
+        from werkzeug.security import check_password_hash
+        if not self.config.get('admin_password_hash'):
+            return False
+        return check_password_hash(self.config['admin_password_hash'], password)
+    
+    def is_first_run(self):
+        """Check if this is the first run"""
+        return self.config.get('first_run', True) or not self.config.get('admin_password_hash')
 
 
 class DesktopApp:
@@ -100,10 +119,13 @@ class DesktopApp:
         """Setup environment variables for the Flask application"""
         os.environ['DATABASE_URL'] = self.config.config['database_url']
         os.environ['SESSION_SECRET'] = self.config.config['secret_key']
-        os.environ['ADMIN_PASSWORD'] = self.config.config['admin_password']
         os.environ['DESKTOP_MODE'] = 'true'
         os.environ['UPLOADS_FOLDER'] = str(self.config.uploads_dir)
         os.environ['LOGS_FOLDER'] = str(self.config.logs_dir)
+        
+        # Set admin password hash if available
+        if self.config.config.get('admin_password_hash'):
+            os.environ['ADMIN_PASSWORD_HASH'] = self.config.config['admin_password_hash']
     
     def _start_server(self):
         """Start the Flask server in a separate thread"""

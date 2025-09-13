@@ -17,9 +17,20 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Authentication helpers
-def get_admin_password():
-    """Get admin password from environment variable."""
-    return os.environ.get('ADMIN_PASSWORD', 'admin123')  # Default for dev only
+def verify_admin_password(password):
+    """Verify admin password using secure hashing."""
+    from werkzeug.security import check_password_hash
+    admin_password_hash = os.environ.get('ADMIN_PASSWORD_HASH')
+    
+    if not admin_password_hash:
+        # For desktop mode first run, allow setting password
+        if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
+            return False  # Will redirect to first-run setup
+        else:
+            # Web mode requires hash to be set
+            raise RuntimeError("ADMIN_PASSWORD_HASH environment variable is required")
+    
+    return check_password_hash(admin_password_hash, password)
 
 def is_authenticated():
     """Check if user is authenticated as admin."""
@@ -126,15 +137,17 @@ def admin_login():
     """Admin login page."""
     if request.method == 'POST':
         password = request.form.get('password', '')
-        admin_password = get_admin_password()
         
-        if password == admin_password:
-            session['admin_authenticated'] = True
-            flash('Successfully logged in as admin', 'success')
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('monitor_status'))
-        else:
-            flash('Invalid admin password', 'error')
+        try:
+            if verify_admin_password(password):
+                session['admin_authenticated'] = True
+                flash('Successfully logged in as admin', 'success')
+                next_page = request.args.get('next')
+                return redirect(next_page) if next_page else redirect(url_for('monitor_status'))
+            else:
+                flash('Invalid admin password', 'error')
+        except RuntimeError as e:
+            flash(f'Authentication error: {str(e)}', 'error')
     
     return render_template('admin_login.html')
 
