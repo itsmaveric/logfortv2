@@ -109,7 +109,6 @@ class DesktopApp:
         self.config = DesktopConfig()
         self.server_thread = None
         self.flask_app = None
-        self.folder_monitor = None
         self.running = False
         
         # Set environment variables for Flask app
@@ -192,16 +191,13 @@ class DesktopApp:
         if self.config.config.get('auto_start_monitor', False):
             try:
                 # Import and start folder monitor
-                from folder_monitor import FolderMonitor
+                from folder_monitor import start_monitor
                 
-                monitored_folders = self.config.config.get('monitored_folders', [])
-                if monitored_folders:
-                    self.folder_monitor = FolderMonitor(
-                        folders=monitored_folders,
-                        interval=self.config.config.get('monitor_interval', 10)
-                    )
-                    self.folder_monitor.start()
-                    logger.info("Folder monitoring started")
+                # Start the global monitor service
+                if start_monitor():
+                    logger.info("Folder monitoring started successfully")
+                else:
+                    logger.warning("Folder monitoring already running or failed to start")
                 
             except Exception as e:
                 logger.error(f"Folder monitor error: {e}")
@@ -216,12 +212,12 @@ class DesktopApp:
         self.running = False
         
         # Stop folder monitor
-        if self.folder_monitor:
-            try:
-                self.folder_monitor.stop()
-                logger.info("Folder monitor stopped")
-            except Exception as e:
-                logger.error(f"Error stopping folder monitor: {e}")
+        try:
+            from folder_monitor import stop_monitor
+            stop_monitor()
+            logger.info("Folder monitor stopped")
+        except Exception as e:
+            logger.error(f"Error stopping folder monitor: {e}")
         
         # Save configuration
         self.config.save_config()
