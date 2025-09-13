@@ -23,8 +23,14 @@
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('index') }}"><i class="fas fa-home me-1"></i>Dashboard</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('upload_file') }}"><i class="fas fa-upload me-1"></i>Upload</a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-upload me-1"></i>Upload
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('upload_file') }}"><i class="fas fa-file me-2"></i>Single Files</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('enhanced_upload') }}"><i class="fas fa-folder me-2"></i>Enhanced Access</a></li>
+                        </ul>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('tracking') }}"><i class="fas fa-search me-1"></i>Search</a>
