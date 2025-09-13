@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-chart-bar me-2"></i>Analytics</h1>
+        <p class="lead">Tracking statistics and performance insights.</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <i class="fas fa-box fa-2x mb-2"></i>
+                <h3>{{ total_records or 0 }}</h3>
+                <p class="mb-0">Total Records</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                <h3>{{ delivered_count or 0 }}</h3>
+                <p class="mb-0">Delivered</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <i class="fas fa-truck fa-2x mb-2"></i>
+                <h3>{{ in_transit_count or 0 }}</h3>
+                <p class="mb-0">In Transit</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <i class="fas fa-file-alt fa-2x mb-2"></i>
+                <h3>{{ files_processed or 0 }}</h3>
+                <p class="mb-0">Files Processed</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Status Distribution</h5>
+            </div>
+            <div class="card-body">
+                {% if status_distribution %}
+                <canvas id="statusChart"></canvas>
+                {% else %}
+                <p class="text-muted text-center py-4">No data available for status distribution.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Processing Timeline</h5>
+            </div>
+            <div class="card-body">
+                {% if daily_stats %}
+                <canvas id="timelineChart"></canvas>
+                {% else %}
+                <p class="text-muted text-center py-4">No data available for processing timeline.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-table me-2"></i>Top Locations</h5>
+            </div>
+            <div class="card-body">
+                {% if top_locations %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Location</th>
+                                <th>Records</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for location in top_locations %}
+                            <tr>
+                                <td>{{ location.location or 'Unknown' }}</td>
+                                <td>{{ location.count }}</td>
+                                <td>
+                                    <div class="progress">
+                                        <div class="progress-bar" style="width: {{ (location.count / total_records * 100)|round(1) }}%"></div>
+                                    </div>
+                                    {{ (location.count / total_records * 100)|round(1) }}%
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center py-4">No location data available.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+{% if status_distribution %}
+// Status Distribution Pie Chart
+const statusCtx = document.getElementById('statusChart').getContext('2d');
+new Chart(statusCtx, {
+    type: 'pie',
+    data: {
+        labels: {{ status_distribution.keys()|list|tojson }},
+        datasets: [{
+            data: {{ status_distribution.values()|list|tojson }},
+            backgroundColor: [
+                '#198754', // success/delivered
+                '#ffc107', // warning/in-transit
+                '#6c757d', // secondary/other
+                '#0dcaf0', // info
+                '#dc3545'  // danger
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+{% endif %}
+
+{% if daily_stats %}
+// Daily Processing Timeline
+const timelineCtx = document.getElementById('timelineChart').getContext('2d');
+new Chart(timelineCtx, {
+    type: 'line',
+    data: {
+        labels: {{ daily_stats.keys()|list|tojson }},
+        datasets: [{
+            label: 'Records Processed',
+            data: {{ daily_stats.values()|list|tojson }},
+            borderColor: '#0d6efd',
+            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+            tension: 0.1
+        }]
+    },
+    options: {
+        responsive: true,
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

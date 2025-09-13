@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-cog me-2"></i>Monitor Settings</h1>
+        <p class="lead">Configure folder monitoring for automatic log file processing.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-folder-plus me-2"></i>Add Folder to Monitor</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="folder_path" class="form-label">Folder Path</label>
+                        <input type="text" class="form-control" id="folder_path" name="folder_path" 
+                               placeholder="/path/to/log/folder" required>
+                        <div class="form-text">Enter the full path to the folder you want to monitor for new log files.</div>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="auto_process" name="auto_process" checked>
+                        <label class="form-check-label" for="auto_process">
+                            Auto-process new files
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Add Folder
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        {% if folders %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-list me-2"></i>Current Folders</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Path</th>
+                                <th>Auto Process</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for folder in folders %}
+                            <tr>
+                                <td><code>{{ folder.path }}</code></td>
+                                <td>
+                                    <span class="badge {% if folder.auto_process %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {{ 'Yes' if folder.auto_process else 'No' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge {% if folder.active %}bg-success{% else %}bg-warning{% endif %}">
+                                        {{ 'Active' if folder.active else 'Paused' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="removeFolder('{{ folder.id }}')">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Monitor Information</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Monitors folders for new .txt and .log files</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Automatically processes new files when detected</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Prevents duplicate processing</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Runs in the background continuously</li>
+                    <li class="mb-0"><i class="fas fa-check text-success me-2"></i>Sends notifications on processing completion</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function removeFolder(folderId) {
+    if (confirm('Are you sure you want to remove this folder from monitoring?')) {
+        fetch('/monitor/settings/remove/' + folderId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error removing folder: ' + data.error);
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h1>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-0">Total Records</h5>
+                        <h2 class="mb-0">{{ stats.total_records if stats else 0 }}</h2>
+                    </div>
+                    <i class="fas fa-box fa-2x"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-0">Delivered</h5>
+                        <h2 class="mb-0">{{ stats.delivered if stats else 0 }}</h2>
+                    </div>
+                    <i class="fas fa-check-circle fa-2x"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-0">In Transit</h5>
+                        <h2 class="mb-0">{{ stats.in_transit if stats else 0 }}</h2>
+                    </div>
+                    <i class="fas fa-truck fa-2x"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="card-title mb-0">Files Processed</h5>
+                        <h2 class="mb-0">{{ stats.files_processed if stats else 0 }}</h2>
+                    </div>
+                    <i class="fas fa-file-alt fa-2x"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Recent Tracking Records</h5>
+            </div>
+            <div class="card-body">
+                {% if recent_records %}
+                <div class="table-responsive">
+                    <table id="recentTable" class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Reference</th>
+                                <th>Status</th>
+                                <th>Description</th>
+                                <th>Location</th>
+                                <th>Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in recent_records %}
+                            <tr>
+                                <td><a href="{{ url_for('reference_detail', reference=record.reference_number) }}" class="text-decoration-none">{{ record.reference_number }}</a></td>
+                                <td>
+                                    <span class="badge {% if 'deliver' in record.status.lower() %}bg-success{% elif 'transit' in record.status.lower() %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {{ record.status }}
+                                    </span>
+                                </td>
+                                <td>{{ record.description or 'N/A' }}</td>
+                                <td>{{ record.location or 'N/A' }}</td>
+                                <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M') if record.timestamp else 'N/A' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">No tracking records found. <a href="{{ url_for('upload_file') }}">Upload a log file</a> to get started.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#recentTable').DataTable({
+        "pageLength": 10,
+        "order": [[ 4, "desc" ]],
+        "responsive": true
+    });
+});
+</script>
+{% endblock %}
