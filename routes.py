@@ -534,6 +534,27 @@ def analytics():
                          days_in_range=days_in_range)
 
 
+@app.route('/api/timeline/<reference_number>')
+def api_timeline(reference_number):
+    """API endpoint to get timeline data for a specific reference number."""
+    timeline = ReflixTracking.query.filter_by(
+        reference_number=reference_number
+    ).order_by(ReflixTracking.timestamp.asc()).all()
+    
+    timeline_data = []
+    for record in timeline:
+        timeline_data.append({
+            'timestamp': record.timestamp.isoformat() if record.timestamp else None,
+            'status': record.status,
+            'description': record.description,
+            'location': record.location,
+            'log_file_name': record.log_file_name,
+            'created_at': record.created_at.isoformat() if record.created_at else None
+        })
+    
+    return jsonify(timeline_data)
+
+
 @app.route('/export.xlsx')
 def export_excel():
     """Export tracking data to Excel with filtering and multiple sheets."""
