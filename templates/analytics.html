@@ -147,7 +147,7 @@
                                     </button>
                                 </td>
                                 <td>
-                                    <a href="{{ url_for('reference_detail', reference=ref.reference_number) }}" class="btn btn-sm btn-outline-primary">
+                                    <a href="{{ url_for('reference_detail', reference_number=ref.reference_number) }}" class="btn btn-sm btn-outline-primary">
                                         <i class="fas fa-eye me-1"></i>Details
                                     </a>
                                 </td>
@@ -181,7 +181,7 @@
                                 <small class="text-muted">{{ activity.created_at.strftime('%m/%d %H:%M') }}</small>
                             </div>
                             <div class="col-md-3">
-                                <a href="{{ url_for('reference_detail', reference=activity.reference_number) }}" class="text-decoration-none">
+                                <a href="{{ url_for('reference_detail', reference_number=activity.reference_number) }}" class="text-decoration-none">
                                     <strong>{{ activity.reference_number }}</strong>
                                 </a>
                             </div>
@@ -232,8 +232,8 @@
 // Status Distribution Chart
 {% if status_data %}
 const statusCtx = document.getElementById('statusChart').getContext('2d');
-const statusLabels = {{ [item.status for item in status_data]|tojson }};
-const statusCounts = {{ [item.count for item in status_data]|tojson }};
+const statusLabels = [{% for item in status_data %}"{{ item.status }}"{% if not loop.last %},{% endif %}{% endfor %}];
+const statusCounts = [{% for item in status_data %}{{ item.count }}{% if not loop.last %},{% endif %}{% endfor %}];
 
 new Chart(statusCtx, {
     type: 'doughnut',
@@ -284,8 +284,8 @@ new Chart(statusCtx, {
 // Daily Activity Chart
 {% if daily_volume %}
 const activityCtx = document.getElementById('activityChart').getContext('2d');
-const activityDates = {{ [item.date.strftime('%m/%d') for item in daily_volume]|tojson }};
-const activityCounts = {{ [item.count for item in daily_volume]|tojson }};
+const activityDates = [{% for item in daily_volume %}"{{ item.date.strftime('%m/%d') }}"{% if not loop.last %},{% endif %}{% endfor %}];
+const activityCounts = [{% for item in daily_volume %}{{ item.count }}{% if not loop.last %},{% endif %}{% endfor %}];
 
 new Chart(activityCtx, {
     type: 'line',
