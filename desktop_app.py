@@ -122,6 +122,10 @@ class DesktopApp:
         os.environ['UPLOADS_FOLDER'] = str(self.config.uploads_dir)
         os.environ['LOGS_FOLDER'] = str(self.config.logs_dir)
         
+        # Fix PyWebView debugging issues
+        os.environ['REMOTE_DEBUGGING_PORT'] = '0'  # Disable remote debugging
+        os.environ['PYTHONHTTPSVERIFY'] = '0'  # Avoid SSL issues in webview
+        
         # Set admin password hash if available
         if self.config.config.get('admin_password_hash'):
             os.environ['ADMIN_PASSWORD_HASH'] = self.config.config['admin_password_hash']
@@ -168,7 +172,7 @@ class DesktopApp:
             else:
                 raise Exception("Server failed to start within timeout")
             
-            # Create webview window
+            # Create webview window with additional configuration
             window = webview.create_window(
                 title=self.config.app_name,
                 url=url,
@@ -177,7 +181,8 @@ class DesktopApp:
                 min_size=(800, 600),
                 resizable=True,
                 shadow=True,
-                on_top=False
+                on_top=False,
+                text_select=False  # Disable text selection for app-like feel
             )
             
             return window
@@ -240,15 +245,27 @@ class DesktopApp:
             # Create and show main window
             window = self._create_window()
             if window:
-                # Configure webview
+                # Configure webview with safer settings
                 webview.settings = {
                     'ALLOW_DOWNLOADS': True,
                     'ALLOW_FILE_URLS': True,
-                    'DEBUG': False
+                    'DEBUG': False,
+                    'OPEN_EXTERNAL_LINKS_IN_BROWSER': True,
+                    'OPEN_DEVTOOLS_IN_DEBUG': False
                 }
                 
-                # Start webview (blocking call)
-                webview.start(debug=False, user_agent='REFLIV-Desktop/1.0')
+                # Start webview (blocking call) with error handling
+                try:
+                    webview.start(
+                        debug=False, 
+                        user_agent='REFLIV-Desktop/1.0',
+                        private_mode=True,  # Run in private mode to avoid cache issues
+                        storage_path=str(self.config.config_dir)  # Set storage path
+                    )
+                except Exception as webview_error:
+                    logger.error(f"WebView start error: {webview_error}")
+                    # Fallback: try with minimal settings
+                    webview.start(debug=False)
             
             self.shutdown()
             
