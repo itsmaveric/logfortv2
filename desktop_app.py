@@ -28,7 +28,7 @@ class DesktopConfig:
     """Handle desktop application configuration"""
     
     def __init__(self):
-        self.app_name = "REFLIV Tracking"
+        self.app_name = "Last Mile Tracking"
         self.config_dir = Path(os.environ.get('APPDATA', '.')) / 'REFLIV'
         self.config_file = self.config_dir / 'config.json'
         self.db_file = self.config_dir / 'tracking.db'

@@ -11,10 +11,32 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {'txt', 'log'}
+ALLOWED_EXTENSIONS = {'log'}
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    """Check if file matches log_tracktrace pattern with .log, .log.1, .log.2, etc."""
+    if not filename:
+        return False
+    
+    # Must contain log_tracktrace in filename
+    if 'log_tracktrace' not in filename.lower():
+        return False
+    
+    # Check if ends with .log or .log.N (N = 1-10)
+    filename_lower = filename.lower()
+    if filename_lower.endswith('.log'):
+        return True
+    
+    # Check for .log.N pattern
+    parts = filename_lower.split('.')
+    if len(parts) >= 3 and parts[-2] == 'log':
+        try:
+            log_num = int(parts[-1])
+            return 1 <= log_num <= 10
+        except ValueError:
+            return False
+    
+    return False
 
 # Authentication helpers
 def verify_admin_password(password):
@@ -184,104 +206,119 @@ def enhanced_upload():
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_file():
     if request.method == 'POST':
-        # Check if file was uploaded
+        # Check if files were uploaded
         if 'file' not in request.files:
-            flash('No file selected', 'error')
+            flash('No files selected', 'error')
             return redirect(request.url)
         
-        file = request.files['file']
-        if file.filename == '':
-            flash('No file selected', 'error')
+        files = request.files.getlist('file')
+        if not files or all(file.filename == '' for file in files):
+            flash('No files selected', 'error')
             return redirect(request.url)
         
-        if file and file.filename and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            
-            # Check if file already processed
-            existing_file = LogFile.query.filter_by(filename=filename).first()
-            if existing_file:
-                flash(f'File {filename} has already been processed', 'warning')
-                return redirect(url_for('upload_file'))
-            
-            # Initialize log_file variable
-            log_file = None
-            
-            try:
-                # Read file content with progress info
-                logger.info(f"Starting to read uploaded file: {filename}")
-                file_content = file.read().decode('utf-8')
-                file_size = len(file_content)
-                logger.info(f"File read complete. Size: {file_size:,} bytes")
+        processed_files = 0
+        errors = []
+        
+        for file in files:
+            if file and file.filename and allowed_file(file.filename):
+                filename = secure_filename(file.filename)
                 
-                # Create log file record
-                log_file = LogFile()
-                log_file.filename = filename
-                log_file.file_size = file_size
-                db.session.add(log_file)
-                db.session.commit()
+                # Check if file already processed
+                existing_file = LogFile.query.filter_by(filename=filename).first()
+                if existing_file:
+                    errors.append(f'File {filename} has already been processed')
+                    continue
                 
-                # Parse the file
-                parser = ReflixLogParser()
-                records = parser.parse_log_file(file_content, filename)
+                # Initialize log_file variable
+                log_file = None
                 
-                # Save tracking records (optimized for large files)
-                records_saved = 0
-                batch_size = 100
-                
-                for i, record_data in enumerate(records):
-                    try:
-                        # Clean and validate data
-                        clean_data = {}
-                        for key, value in record_data.items():
-                            if isinstance(value, str):
-                                clean_data[key] = value.encode('utf-8', errors='ignore').decode('utf-8')
-                            else:
-                                clean_data[key] = value
-                        
-                        # Simplified duplicate check (just reference number for performance)
-                        existing = ReflixTracking.query.filter_by(
-                            reference_number=clean_data['reference_number']
-                        ).first()
-                        
-                        if not existing:
-                            tracking_record = ReflixTracking(**clean_data)
-                            db.session.add(tracking_record)
-                            records_saved += 1
-                            
-                        # Commit in batches to avoid timeout
-                        if (i + 1) % batch_size == 0:
-                            db.session.commit()
-                            logger.info(f"Committed batch: {i+1} records processed")
-                            
-                    except Exception as e:
-                        logger.error(f"Error processing record {i+1}: {e}")
-                        continue
-                
-                # Update log file record
-                log_file.processed = True
-                log_file.records_extracted = records_saved
-                
-                db.session.commit()
-                
-                flash(f'Successfully processed {filename}. Extracted {records_saved} tracking records.', 'success')
-                return redirect(url_for('tracking'))
-                
-            except Exception as e:
-                db.session.rollback()
-                logger.error(f"Error processing file {filename}: {e}")
-                
-                # Update log file with error
                 try:
-                    if 'log_file' in locals() and log_file:
-                        log_file.error_message = str(e)
-                        db.session.commit()
-                except:
-                    pass  # If we can't update the error, don't fail completely
+                    # Read file content with progress info
+                    logger.info(f"Starting to read uploaded file: {filename}")
+                    file_content = file.read().decode('utf-8')
+                    file_size = len(file_content)
+                    logger.info(f"File read complete. Size: {file_size:,} bytes")
+                    
+                    # Create log file record
+                    log_file = LogFile()
+                    log_file.filename = filename
+                    log_file.file_size = file_size
+                    db.session.add(log_file)
+                    db.session.commit()
+                    
+                    # Parse the file
+                    parser = ReflixLogParser()
+                    records = parser.parse_log_file(file_content, filename)
+                    
+                    # Save tracking records (optimized for large files)
+                    records_saved = 0
+                    batch_size = 100
+                    
+                    for i, record_data in enumerate(records):
+                        try:
+                            # Clean and validate data
+                            clean_data = {}
+                            for key, value in record_data.items():
+                                if isinstance(value, str):
+                                    clean_data[key] = value.encode('utf-8', errors='ignore').decode('utf-8')
+                                else:
+                                    clean_data[key] = value
+                            
+                            # Simplified duplicate check (just reference number for performance)
+                            existing = ReflixTracking.query.filter_by(
+                                reference_number=clean_data['reference_number']
+                            ).first()
+                            
+                            if not existing:
+                                tracking_record = ReflixTracking(**clean_data)
+                                db.session.add(tracking_record)
+                                records_saved += 1
+                                
+                            # Commit in batches to avoid timeout
+                            if (i + 1) % batch_size == 0:
+                                db.session.commit()
+                                logger.info(f"Committed batch: {i+1} records processed")
+                                
+                        except Exception as e:
+                            logger.error(f"Error processing record {i+1}: {e}")
+                            continue
+                    
+                    # Update log file record
+                    log_file.processed = True
+                    log_file.records_extracted = records_saved
+                    
+                    db.session.commit()
+                    
+                    processed_files += 1
+                    logger.info(f'Successfully processed {filename}. Extracted {records_saved} tracking records.')
                 
-                flash(f'Error processing file: {str(e)}', 'error')
-                return redirect(request.url)
-        else:
-            flash('Invalid file type. Please upload .txt or .log files only.', 'error')
+                except Exception as e:
+                    db.session.rollback()
+                    logger.error(f"Error processing file {filename}: {e}")
+                    
+                    # Update log file with error
+                    try:
+                        if log_file:
+                            log_file.error_message = str(e)
+                            db.session.commit()
+                    except:
+                        pass  # If we can't update the error, don't fail completely
+                    
+                    errors.append(f'Error processing {filename}: {str(e)}')
+            else:
+                if file and file.filename:
+                    errors.append(f'Invalid file type: {file.filename}. Please upload log_tracktrace.log files only.')
+        
+        # Show results
+        if processed_files > 0:
+            flash(f'Successfully processed {processed_files} file(s)', 'success')
+        
+        if errors:
+            for error in errors:
+                flash(error, 'error')
+        
+        if processed_files == 0 and not errors:
+            flash('No valid files were uploaded', 'error')
     
     return render_template('upload.html')
 
