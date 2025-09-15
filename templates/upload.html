@@ -3,8 +3,8 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1><i class="fas fa-upload me-2"></i>Upload Log File</h1>
-        <p class="lead">Upload REFLIV log files (.txt or .log) to extract tracking information.</p>
+        <h1><i class="fas fa-upload me-2"></i>Upload Log Files</h1>
+        <p class="lead">Upload log_tracktrace files (.log, .log.1 to .log.10) to extract tracking information.</p>
     </div>
 </div>
 
@@ -14,9 +14,9 @@
             <div class="card-body">
                 <form method="POST" enctype="multipart/form-data" id="uploadForm">
                     <div class="mb-3">
-                        <label for="file" class="form-label">Select Log File</label>
-                        <input type="file" class="form-control" id="file" name="file" accept=".txt,.log" required>
-                        <div class="form-text">Accepted formats: .txt, .log (Max size: 100MB)</div>
+                        <label for="file" class="form-label">Select Log Files</label>
+                        <input type="file" class="form-control" id="file" name="file" accept=".log" multiple required>
+                        <div class="form-text">Accepted formats: .log, .log.1, .log.2, etc. (Max size per file: 100MB)</div>
                     </div>
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary btn-lg">
@@ -33,8 +33,8 @@
             </div>
             <div class="card-body">
                 <ul class="list-unstyled">
-                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Upload log files containing REFLIV API calls</li>
-                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Supported formats: .txt and .log files</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Upload log_tracktrace files containing tracking API calls</li>
+                    <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Supported formats: .log, .log.1, .log.2, up to .log.10</li>
                     <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Maximum file size: 100MB</li>
                     <li class="mb-2"><i class="fas fa-check text-success me-2"></i>The system will automatically extract tracking data from XML responses</li>
                     <li class="mb-0"><i class="fas fa-check text-success me-2"></i>Duplicate files will be detected and skipped</li>
