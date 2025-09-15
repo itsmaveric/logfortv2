@@ -1,5 +1,18 @@
-
-
+#!/usr/bin/env python3
+"""
+REFLIV Tracking System - Desktop Application
+Main entry point for the Windows desktop version
+"""
+import os
+import sys
+import json
+import threading
+import time
+import logging
+from pathlib import Path
+import webview
+from waitress import serve
+from werkzeug.serving import make_ssl_devcert
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
