@@ -45,7 +45,7 @@ class MonitoredFolder(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     path = db.Column(db.String(500), nullable=False, unique=True)
-    include_patterns = db.Column(db.String(255), nullable=False, default='*.txt,*.log')
+    include_patterns = db.Column(db.String(255), nullable=False, default='log_tracktrace*.log*')
     exclude_patterns = db.Column(db.String(255), nullable=True)
     polling_interval = db.Column(db.Integer, nullable=False, default=10)  # seconds
     max_files = db.Column(db.Integer, nullable=False, default=10)
