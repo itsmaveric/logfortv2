@@ -157,47 +157,43 @@ class FolderMonitor:
         """Update heartbeat and check for stop signal. Returns True if should continue running."""
         try:
             with app.app_context():
-                # Use direct SQL UPDATE for better reliability with long-running threads
-                from sqlalchemy import text
+                # Get or create the monitor instance using ORM
+                from models import MonitorInstance
                 
-                result = db.engine.execute(text("""
-                    UPDATE monitor_instance 
-                    SET heartbeat_at = NOW()
-                    WHERE id = :instance_id AND stop_requested = false
-                """), {"instance_id": self.instance_id})
+                instance = MonitorInstance.query.filter_by(id=self.instance_id).first()
                 
-                # Check if any row was updated
-                if result.rowcount == 0:
-                    # Check if instance exists and has stop_requested=true
-                    check_result = db.engine.execute(text("""
-                        SELECT stop_requested FROM monitor_instance WHERE id = :instance_id
-                    """), {"instance_id": self.instance_id})
-                    
-                    row = check_result.fetchone()
-                    if row and row[0]:  # stop_requested is true
-                        logger.info(f"Stop signal received from database")
-                        return False
-                    else:
-                        # Instance doesn't exist, create it
-                        db.engine.execute(text("""
-                            INSERT INTO monitor_instance 
-                            (id, active, stop_requested, process_id, worker_id, heartbeat_at, started_at)
-                            VALUES (:id, true, false, :pid, :worker, NOW(), NOW())
-                            ON CONFLICT (id) DO UPDATE SET
-                                heartbeat_at = NOW(), 
-                                active = true,
-                                stop_requested = false
-                        """), {
-                            "id": self.instance_id,
-                            "pid": self.process_id, 
-                            "worker": self.worker_id
-                        })
+                if not instance:
+                    # Create new instance
+                    instance = MonitorInstance()
+                    instance.id = self.instance_id
+                    instance.active = True
+                    instance.stop_requested = False
+                    instance.process_id = self.process_id
+                    instance.worker_id = self.worker_id
+                    instance.heartbeat_at = datetime.utcnow()
+                    instance.started_at = datetime.utcnow()
+                    db.session.add(instance)
+                    db.session.commit()
+                    logger.debug(f"Created new monitor instance")
+                    return True
                 
+                # Check for stop request from other workers
+                if instance.stop_requested:
+                    logger.info(f"Stop signal received from database")
+                    return False
+                
+                # Update heartbeat
+                instance.heartbeat_at = datetime.utcnow()
+                db.session.commit()
                 logger.debug(f"Heartbeat updated successfully")
                 return True
                     
         except Exception as e:
             logger.error(f"Heartbeat update failed (continuing): {e}", exc_info=True)
+            try:
+                db.session.rollback()
+            except:
+                pass
             return True  # Don't stop monitor for transient DB errors
     
     def _monitor_loop(self):
