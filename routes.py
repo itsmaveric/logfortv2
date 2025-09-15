@@ -1211,53 +1211,90 @@ def clear_database():
     """Clear database tables for testing purposes."""
     if request.method == 'POST':
         action = request.form.get('action')
-        confirm = request.form.get('confirm', '').lower()
+        confirm_phrase = request.form.get('confirm_phrase', '').strip()
+        csrf_token = request.form.get('csrf_token', '')
         
-        if confirm != 'yes':
-            flash('Database clear cancelled - confirmation required', 'warning')
+        # CSRF protection - verify token matches session with constant-time comparison
+        import hmac
+        session_token = session.get('csrf_token', '')
+        if not csrf_token or not hmac.compare_digest(csrf_token, session_token):
+            flash('Invalid security token. Please try again.', 'error')
             return redirect(url_for('clear_database'))
         
+        # Server-side confirmation - require typing DELETE
+        if confirm_phrase != 'DELETE':
+            flash('Database clear cancelled - you must type DELETE to confirm', 'warning')
+            return redirect(url_for('clear_database'))
+        
+        if not action or action not in ['clear_tracking', 'clear_files', 'clear_monitoring', 'clear_all']:
+            flash('Invalid action selected', 'error')
+            return redirect(url_for('clear_database'))
+        
+        # Stop monitor if running before clearing data
         try:
-            if action == 'clear_tracking':
-                # Clear tracking records only
-                ReflixTracking.query.delete()
-                db.session.commit()
-                flash('Tracking records cleared successfully', 'success')
+            if is_monitor_running():
+                stop_monitor()
+                logger.info("Monitor stopped before database clear")
+        except Exception as e:
+            logger.warning(f"Could not stop monitor before clear: {e}")
+        
+        # Perform clearing in a transaction with dependency-safe ordering
+        success_message = ""
+        try:
+            with db.session.begin():
+                if action == 'clear_tracking':
+                    # Clear tracking records only
+                    count = ReflixTracking.query.count()
+                    ReflixTracking.query.delete()
+                    success_message = f'Cleared {count} tracking records successfully'
+                    
+                elif action == 'clear_files':
+                    # Clear file records and states in dependency-safe order
+                    files_count = LogFile.query.count()
+                    states_count = MonitoredFileState.query.delete()
+                    LogFile.query.delete()
+                    success_message = f'Cleared {files_count} file records and {states_count} file states successfully'
+                    
+                elif action == 'clear_monitoring':
+                    # Clear monitoring configuration in dependency-safe order
+                    states_count = MonitoredFileState.query.delete()
+                    folders_count = MonitoredFolder.query.delete()
+                    instances_count = MonitorInstance.query.delete()
+                    success_message = f'Cleared monitoring config: {folders_count} folders, {states_count} states, {instances_count} instances'
+                    
+                elif action == 'clear_all':
+                    # Clear all data except admin settings in dependency-safe order
+                    tracking_count = ReflixTracking.query.count()
+                    files_count = LogFile.query.count()
+                    states_count = MonitoredFileState.query.delete()
+                    folders_count = MonitoredFolder.query.delete()
+                    instances_count = MonitorInstance.query.delete()
+                    ReflixTracking.query.delete()
+                    LogFile.query.delete()
+                    
+                    total_cleared = tracking_count + files_count + states_count + folders_count + instances_count
+                    success_message = f'Cleared all data: {total_cleared} total records (admin settings preserved)'
                 
-            elif action == 'clear_files':
-                # Clear file records and states
-                LogFile.query.delete()
-                MonitoredFileState.query.delete()
-                db.session.commit()
-                flash('File records and states cleared successfully', 'success')
-                
-            elif action == 'clear_monitoring':
-                # Clear monitoring configuration
-                MonitoredFolder.query.delete()
-                MonitoredFileState.query.delete()
-                MonitorInstance.query.delete()
-                db.session.commit()
-                flash('Monitoring configuration cleared successfully', 'success')
-                
-            elif action == 'clear_all':
-                # Clear all data except admin settings
-                ReflixTracking.query.delete()
-                LogFile.query.delete()
-                MonitoredFileState.query.delete()
-                MonitoredFolder.query.delete()
-                MonitorInstance.query.delete()
-                db.session.commit()
-                flash('All data cleared successfully (admin settings preserved)', 'success')
-                
-            else:
-                flash('Invalid action selected', 'error')
+                logger.info(f"Database clear completed: action={action}, user=admin")
+            
+            # Flash success message after successful commit
+            flash(success_message, 'success')
+            
+            # Rotate CSRF token after successful operation to prevent replay
+            import secrets
+            session['csrf_token'] = secrets.token_hex(16)
                 
         except Exception as e:
             db.session.rollback()
             flash(f'Error clearing database: {str(e)}', 'error')
-            logger.error(f"Database clear error: {e}")
+            logger.error(f"Database clear error: {e}", exc_info=True)
         
         return redirect(url_for('clear_database'))
+    
+    # GET request - generate CSRF token and show confirmation page
+    import os
+    csrf_token = os.urandom(32).hex()
+    session['csrf_token'] = csrf_token
     
     # Get current record counts
     tracking_count = ReflixTracking.query.count()
@@ -1269,7 +1306,8 @@ def clear_database():
                          tracking_count=tracking_count,
                          files_count=files_count,
                          folders_count=folders_count,
-                         file_states_count=file_states_count)
+                         file_states_count=file_states_count,
+                         csrf_token=csrf_token)
 
 @app.route('/admin/error-logs')
 @require_admin_auth
