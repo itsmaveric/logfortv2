@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block title %}Clear Database - Admin{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-database text-danger me-2"></i>Clear Database</h1>
+                <a href="{{ url_for('monitor_status') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Monitor
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Database Clear Options</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning" role="alert">
+                        <i class="fas fa-warning me-2"></i>
+                        <strong>Warning:</strong> These actions cannot be undone. Make sure you have backups if needed.
+                    </div>
+
+                    <form method="POST" id="clearForm">
+                        <div class="mb-4">
+                            <h6>Select what to clear:</h6>
+                            
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="action" value="clear_tracking" id="clear_tracking">
+                                <label class="form-check-label" for="clear_tracking">
+                                    <strong>Tracking Records Only</strong> ({{ tracking_count }} records)
+                                    <small class="text-muted d-block">Clears parsed tracking data but keeps file states and monitoring config</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="action" value="clear_files" id="clear_files">
+                                <label class="form-check-label" for="clear_files">
+                                    <strong>File Records & States</strong> ({{ files_count }} files, {{ file_states_count }} states)
+                                    <small class="text-muted d-block">Clears uploaded files and monitoring file states</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="action" value="clear_monitoring" id="clear_monitoring">
+                                <label class="form-check-label" for="clear_monitoring">
+                                    <strong>Monitoring Configuration</strong> ({{ folders_count }} folders)
+                                    <small class="text-muted d-block">Clears folder monitoring setup and file states</small>
+                                </label>
+                            </div>
+                            
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="radio" name="action" value="clear_all" id="clear_all">
+                                <label class="form-check-label" for="clear_all">
+                                    <strong>All Data</strong> (everything except admin settings)
+                                    <small class="text-muted d-block">Complete reset - clears all tracking, files, and monitoring data</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label"><strong>Confirmation Required:</strong></label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="confirmCheck" onchange="updateConfirmButton()">
+                                <label class="form-check-label" for="confirmCheck">
+                                    I understand this action cannot be undone
+                                </label>
+                            </div>
+                            <input type="hidden" name="confirm" id="confirmInput" value="">
+                        </div>
+
+                        <button type="submit" class="btn btn-danger" id="clearButton" disabled>
+                            <i class="fas fa-trash me-2"></i>Clear Selected Data
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Current Database Status</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <strong>Tracking Records:</strong>
+                            <span class="badge bg-primary">{{ tracking_count }}</span>
+                        </li>
+                        <li class="mb-2">
+                            <strong>Log Files:</strong>
+                            <span class="badge bg-info">{{ files_count }}</span>
+                        </li>
+                        <li class="mb-2">
+                            <strong>Monitored Folders:</strong>
+                            <span class="badge bg-success">{{ folders_count }}</span>
+                        </li>
+                        <li class="mb-2">
+                            <strong>File States:</strong>
+                            <span class="badge bg-warning">{{ file_states_count }}</span>
+                        </li>
+                    </ul>
+
+                    <hr>
+                    <small class="text-muted">
+                        <i class="fas fa-shield-alt me-1"></i>
+                        Admin settings and authentication are always preserved.
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateConfirmButton() {
+    const checkbox = document.getElementById('confirmCheck');
+    const button = document.getElementById('clearButton');
+    const confirmInput = document.getElementById('confirmInput');
+    const actionSelected = document.querySelector('input[name="action"]:checked');
+    
+    if (checkbox.checked && actionSelected) {
+        button.disabled = false;
+        confirmInput.value = 'yes';
+    } else {
+        button.disabled = true;
+        confirmInput.value = '';
+    }
+}
+
+// Update button state when action changes
+document.querySelectorAll('input[name="action"]').forEach(radio => {
+    radio.addEventListener('change', updateConfirmButton);
+});
+
+// Confirmation dialog
+document.getElementById('clearForm').addEventListener('submit', function(e) {
+    const actionSelected = document.querySelector('input[name="action"]:checked');
+    if (!actionSelected) {
+        e.preventDefault();
+        alert('Please select an action to perform.');
+        return;
+    }
+    
+    const actionText = actionSelected.nextElementSibling.querySelector('strong').textContent;
+    if (!confirm(`Are you absolutely sure you want to clear: ${actionText}?\n\nThis action cannot be undone!`)) {
+        e.preventDefault();
+    }
+});
+</script>
+{% endblock %}

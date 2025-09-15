@@ -1205,6 +1205,72 @@ def delete_monitored_folder(folder_id):
     
     return redirect(url_for('monitor_status'))
 
+@app.route('/admin/clear-database', methods=['GET', 'POST'])
+@require_admin_auth
+def clear_database():
+    """Clear database tables for testing purposes."""
+    if request.method == 'POST':
+        action = request.form.get('action')
+        confirm = request.form.get('confirm', '').lower()
+        
+        if confirm != 'yes':
+            flash('Database clear cancelled - confirmation required', 'warning')
+            return redirect(url_for('clear_database'))
+        
+        try:
+            if action == 'clear_tracking':
+                # Clear tracking records only
+                ReflixTracking.query.delete()
+                db.session.commit()
+                flash('Tracking records cleared successfully', 'success')
+                
+            elif action == 'clear_files':
+                # Clear file records and states
+                LogFile.query.delete()
+                MonitoredFileState.query.delete()
+                db.session.commit()
+                flash('File records and states cleared successfully', 'success')
+                
+            elif action == 'clear_monitoring':
+                # Clear monitoring configuration
+                MonitoredFolder.query.delete()
+                MonitoredFileState.query.delete()
+                MonitorInstance.query.delete()
+                db.session.commit()
+                flash('Monitoring configuration cleared successfully', 'success')
+                
+            elif action == 'clear_all':
+                # Clear all data except admin settings
+                ReflixTracking.query.delete()
+                LogFile.query.delete()
+                MonitoredFileState.query.delete()
+                MonitoredFolder.query.delete()
+                MonitorInstance.query.delete()
+                db.session.commit()
+                flash('All data cleared successfully (admin settings preserved)', 'success')
+                
+            else:
+                flash('Invalid action selected', 'error')
+                
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error clearing database: {str(e)}', 'error')
+            logger.error(f"Database clear error: {e}")
+        
+        return redirect(url_for('clear_database'))
+    
+    # Get current record counts
+    tracking_count = ReflixTracking.query.count()
+    files_count = LogFile.query.count()
+    folders_count = MonitoredFolder.query.count()
+    file_states_count = MonitoredFileState.query.count()
+    
+    return render_template('clear_database.html',
+                         tracking_count=tracking_count,
+                         files_count=files_count,
+                         folders_count=folders_count,
+                         file_states_count=file_states_count)
+
 @app.route('/admin/error-logs')
 @require_admin_auth
 def error_logs():
