@@ -352,7 +352,7 @@ new Chart(statusCtx, {
 // Daily Activity Chart
 {% if daily_volume %}
 const activityCtx = document.getElementById('activityChart').getContext('2d');
-const activityDates = [{% for item in daily_volume %}"{{ item.date.strftime('%m/%d') }}"{% if not loop.last %},{% endif %}{% endfor %}];
+const activityDates = [{% for item in daily_volume %}"{{ item.date }}"{% if not loop.last %},{% endif %}{% endfor %}];
 const activityCounts = [{% for item in daily_volume %}{{ item.count }}{% if not loop.last %},{% endif %}{% endfor %}];
 
 new Chart(activityCtx, {

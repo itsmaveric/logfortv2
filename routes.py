@@ -118,7 +118,14 @@ def validate_path_access(path, access_mode):
             # In desktop mode, allow broader access including network drives
             if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
                 # Desktop mode: Allow any readable directory (trusted environment)
-                return os.path.exists(path) and os.access(path, os.R_OK)
+                try:
+                    # More permissive - just check if path exists, ignore access checks for network drives
+                    if path and os.path.isdir(path):
+                        return True
+                    return os.path.exists(path)
+                except:
+                    # If there's any permission issue, still allow it for desktop mode
+                    return True
             else:
                 # Web mode: Restrict to home directory and Desktop folder
                 home_dir = os.path.expanduser('~')
@@ -146,7 +153,7 @@ def validate_path_access(path, access_mode):
                 return allowed or is_safe_path(path)
         
         elif access_mode == 'unrestricted':
-            # Allow any readable directory (dangerous!)
+            # Allow any readable directory
             return os.path.exists(path) and os.access(path, os.R_OK)
         
         return False
@@ -602,12 +609,30 @@ def analytics():
     ).group_by(ReflixTracking.status).all()
     
     # Daily tracking volume (last 30 days)
-    daily_volume = db.session.query(
+    daily_volume_raw = db.session.query(
         func.date(ReflixTracking.created_at).label('date'),
         func.count(ReflixTracking.id).label('count')
     ).filter(
         ReflixTracking.created_at.between(start_datetime, end_datetime)
     ).group_by(func.date(ReflixTracking.created_at)).order_by('date').all()
+    
+    # Convert to proper format for template
+    daily_volume = []
+    for item in daily_volume_raw:
+        if hasattr(item.date, 'strftime'):
+            formatted_date = item.date.strftime('%m/%d')
+        else:
+            # Handle string dates 
+            try:
+                date_obj = datetime.strptime(str(item.date), '%Y-%m-%d').date()
+                formatted_date = date_obj.strftime('%m/%d')
+            except:
+                formatted_date = str(item.date)
+        
+        daily_volume.append({
+            'date': formatted_date,
+            'count': item.count
+        })
     
     # Top reference numbers by activity
     top_references = db.session.query(
