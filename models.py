@@ -37,6 +37,21 @@ class LogFile(db.Model):
     records_extracted = db.Column(db.Integer, nullable=False, default=0)
     error_message = db.Column(db.Text, nullable=True)
     
+    @property
+    def size(self):
+        """Alias for file_size to match template expectations"""
+        return self.file_size
+    
+    @property 
+    def processing_status(self):
+        """Computed status for template display"""
+        if self.processed and not self.error_message:
+            return 'completed'
+        elif self.error_message:
+            return 'failed'
+        else:
+            return 'processing'
+    
     def __repr__(self):
         return f'<LogFile {self.filename}>'
 

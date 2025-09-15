@@ -45,12 +45,8 @@ def verify_admin_password(password):
     admin_password_hash = os.environ.get('ADMIN_PASSWORD_HASH')
     
     if not admin_password_hash:
-        # For desktop mode first run, allow setting password
-        if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
-            return False  # Will redirect to first-run setup
-        else:
-            # Web mode requires hash to be set
-            raise RuntimeError("ADMIN_PASSWORD_HASH environment variable is required")
+        # Always return False instead of raising, let routes handle redirect
+        return False
     
     return check_password_hash(admin_password_hash, password)
 
