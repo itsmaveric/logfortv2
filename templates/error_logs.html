@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Error Logs - Last Mile Tracking{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1><i class="fas fa-bug"></i> Error Logs</h1>
+                <div>
+                    <button class="btn btn-secondary" onclick="refreshLogs()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <button class="btn btn-info" onclick="downloadLogs()">
+                        <i class="fas fa-download"></i> Download All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <div class="card-text">Critical Errors</div>
+                                    <div class="h4">{{ error_stats.critical_count }}</div>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-exclamation-triangle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <div class="card-text">Errors</div>
+                                    <div class="h4">{{ error_stats.error_count }}</div>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-exclamation-circle fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <div class="card-text">Warnings</div>
+                                    <div class="h4">{{ error_stats.warning_count }}</div>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-exclamation fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <div class="card-text">Log Files</div>
+                                    <div class="h4">{{ log_files|length }}</div>
+                                </div>
+                                <div class="align-self-center">
+                                    <i class="fas fa-file-alt fa-2x"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Errors -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-list"></i> Recent Error Entries</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_errors %}
+                    <div id="recentErrors" style="max-height: 400px; overflow-y: auto;">
+                        <pre class="bg-dark text-light p-3" style="font-size: 0.9em;">{% for line in recent_errors %}{{ line }}{% endfor %}</pre>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-check-circle fa-3x mb-3"></i>
+                        <p>No recent errors found. System is running smoothly!</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Log Files -->
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-folder-open"></i> Available Log Files</h5>
+                </div>
+                <div class="card-body">
+                    {% if log_files %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>File Name</th>
+                                    <th>Size</th>
+                                    <th>Last Modified</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log_file in log_files %}
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-file-alt me-2"></i>
+                                        {{ log_file.name }}
+                                    </td>
+                                    <td>{{ "%.2f"|format(log_file.size / 1024) }} KB</td>
+                                    <td>{{ log_file.modified.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="viewLog('{{ log_file.name }}')">
+                                            <i class="fas fa-eye"></i> View
+                                        </button>
+                                        <a href="{{ url_for('download_error_log', filename=log_file.name) }}" class="btn btn-sm btn-outline-secondary">
+                                            <i class="fas fa-download"></i> Download
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-folder-open fa-3x mb-3"></i>
+                        <p>No log files found.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Log Viewer Modal -->
+<div class="modal fade" id="logViewerModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="logViewerTitle">Log File Viewer</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="logContent" style="max-height: 500px; overflow-y: auto;">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function refreshLogs() {
+    window.location.reload();
+}
+
+function downloadLogs() {
+    window.open('{{ url_for("download_all_error_logs") }}', '_blank');
+}
+
+function viewLog(filename) {
+    document.getElementById('logViewerTitle').textContent = 'Log File: ' + filename;
+    document.getElementById('logContent').innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+    
+    const modal = new bootstrap.Modal(document.getElementById('logViewerModal'));
+    modal.show();
+    
+    fetch(`{{ url_for('view_error_log') }}?filename=${encodeURIComponent(filename)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('logContent').innerHTML = 
+                    `<pre class="bg-dark text-light p-3" style="font-size: 0.85em;">${data.content}</pre>`;
+            } else {
+                document.getElementById('logContent').innerHTML = 
+                    `<div class="alert alert-danger">Error loading log file: ${data.error}</div>`;
+            }
+        })
+        .catch(error => {
+            document.getElementById('logContent').innerHTML = 
+                `<div class="alert alert-danger">Error loading log file: ${error.message}</div>`;
+        });
+}
+
+// Auto-refresh every 30 seconds if there are critical errors
+{% if error_stats.critical_count > 0 %}
+setTimeout(function() {
+    if (document.visibilityState === 'visible') {
+        refreshLogs();
+    }
+}, 30000);
+{% endif %}
+</script>
+{% endblock %}

@@ -281,16 +281,19 @@ class FolderMonitor:
         """Get files matching the folder's include/exclude patterns or rotation settings."""
         files = []
         
+        # Import allowed_file function for strict filtering
+        from routes import allowed_file
+        
         # If rotation_base is specified, use rotation file logic
         if folder.rotation_base:
             # Build explicit rotation file list: base, base.1, base.2, ..., base.N
             base_file = os.path.join(folder.path, folder.rotation_base)
-            if os.path.exists(base_file):
+            if os.path.exists(base_file) and allowed_file(os.path.basename(base_file)):
                 files.append(base_file)
             
             for i in range(1, folder.rotation_max + 1):
                 rotation_file = f"{base_file}.{i}"
-                if os.path.exists(rotation_file):
+                if os.path.exists(rotation_file) and allowed_file(os.path.basename(rotation_file)):
                     files.append(rotation_file)
             
             # Sort by modification time (newest first) - base file is usually newest
@@ -316,7 +319,17 @@ class FolderMonitor:
                     exclude_files = set(glob.glob(pattern_path))
                     files = [f for f in files if f not in exclude_files]
         
-        return files
+        # CRITICAL: Apply strict log_tracktrace filename filtering to ALL files
+        # This ensures only files named like "log_tracktrace*" are processed
+        filtered_files = []
+        for file_path in files:
+            filename = os.path.basename(file_path)
+            if allowed_file(filename):
+                filtered_files.append(file_path)
+            else:
+                logger.debug(f"Ignoring file '{filename}' - does not match log_tracktrace pattern")
+        
+        return filtered_files
     
     def _enforce_max_files(self, folder: MonitoredFolder, current_files: List[str]):
         """Enforce max files limit by archiving/deleting oldest files."""

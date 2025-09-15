@@ -7,6 +7,7 @@ from app import app, db
 from models import ReflixTracking, LogFile, MonitoredFolder, MonitoredFileState, MonitorInstance
 from log_parser import ReflixLogParser
 from folder_monitor import get_monitor, start_monitor, stop_monitor, is_monitor_running
+from error_logger import get_error_logger, log_error, log_warning, log_info, log_file_error, log_db_error
 import logging
 
 logger = logging.getLogger(__name__)
@@ -114,30 +115,35 @@ def validate_path_access(path, access_mode):
             return is_safe_path(path)
         
         elif access_mode == 'home_desktop':
-            # Allow home directory and Desktop folder
-            home_dir = os.path.expanduser('~')
-            home_realpath = os.path.realpath(home_dir)
-            
-            # Desktop folder location depends on OS
-            if platform.system() == 'Windows':
-                desktop_path = os.path.join(home_dir, 'Desktop')
-            elif platform.system() == 'Darwin':  # macOS
-                desktop_path = os.path.join(home_dir, 'Desktop')
-            else:  # Linux and others
-                desktop_path = os.path.join(home_dir, 'Desktop')
-            
-            desktop_realpath = os.path.realpath(desktop_path) if os.path.exists(desktop_path) else None
-            
-            # Allow home directory, Desktop, or subdirectories
-            allowed = (resolved_path.startswith(home_realpath + os.sep) or
-                      resolved_path == home_realpath)
-            
-            if desktop_realpath:
-                allowed = allowed or (resolved_path.startswith(desktop_realpath + os.sep) or
-                                     resolved_path == desktop_realpath)
-            
-            # Also allow safe paths (temp, working dir)
-            return allowed or is_safe_path(path)
+            # In desktop mode, allow broader access including network drives
+            if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
+                # Desktop mode: Allow any readable directory (trusted environment)
+                return os.path.exists(path) and os.access(path, os.R_OK)
+            else:
+                # Web mode: Restrict to home directory and Desktop folder
+                home_dir = os.path.expanduser('~')
+                home_realpath = os.path.realpath(home_dir)
+                
+                # Desktop folder location depends on OS
+                if platform.system() == 'Windows':
+                    desktop_path = os.path.join(home_dir, 'Desktop')
+                elif platform.system() == 'Darwin':  # macOS
+                    desktop_path = os.path.join(home_dir, 'Desktop')
+                else:  # Linux and others
+                    desktop_path = os.path.join(home_dir, 'Desktop')
+                
+                desktop_realpath = os.path.realpath(desktop_path) if os.path.exists(desktop_path) else None
+                
+                # Allow home directory, Desktop, or subdirectories
+                allowed = (resolved_path.startswith(home_realpath + os.sep) or
+                          resolved_path == home_realpath)
+                
+                if desktop_realpath:
+                    allowed = allowed or (resolved_path.startswith(desktop_realpath + os.sep) or
+                                         resolved_path == desktop_realpath)
+                
+                # Also allow safe paths (temp, working dir)
+                return allowed or is_safe_path(path)
         
         elif access_mode == 'unrestricted':
             # Allow any readable directory (dangerous!)
@@ -492,7 +498,10 @@ def monitor_settings():
             if access_mode == 'safe':
                 flash('Folder path is not allowed for security reasons. Only paths under /tmp or current working directory are permitted.', 'error')
             elif access_mode == 'home_desktop':
-                flash('Desktop folder access is restricted to your home Desktop directory only.', 'error')
+                if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
+                    flash('Invalid folder path or access denied. Please check the path exists and is readable.', 'error')
+                else:
+                    flash('Desktop folder access is restricted to your home Desktop directory only.', 'error')
             else:
                 flash('Invalid folder path or access denied.', 'error')
             return redirect(url_for('monitor_settings'))
@@ -1166,3 +1175,129 @@ def delete_monitored_folder(folder_id):
         db.session.rollback()
     
     return redirect(url_for('monitor_status'))
+
+@app.route('/admin/error-logs')
+@require_admin_auth
+def error_logs():
+    """View error logs and system diagnostics."""
+    try:
+        error_logger = get_error_logger()
+        
+        # Get log files
+        log_files = error_logger.get_log_files()
+        
+        # Get recent errors
+        recent_errors = error_logger.read_recent_errors(lines=100)
+        
+        # Calculate error statistics
+        error_stats = {
+            'critical_count': 0,
+            'error_count': 0,
+            'warning_count': 0
+        }
+        
+        for line in recent_errors:
+            if '| CRITICAL |' in line:
+                error_stats['critical_count'] += 1
+            elif '| ERROR |' in line:
+                error_stats['error_count'] += 1
+            elif '| WARNING |' in line:
+                error_stats['warning_count'] += 1
+        
+        return render_template('error_logs.html', 
+                             log_files=log_files,
+                             recent_errors=recent_errors,
+                             error_stats=error_stats)
+    
+    except Exception as e:
+        flash(f'Error loading error logs: {str(e)}', 'error')
+        return render_template('error_logs.html', 
+                             log_files=[],
+                             recent_errors=[],
+                             error_stats={'critical_count': 0, 'error_count': 0, 'warning_count': 0})
+
+@app.route('/admin/error-logs/view')
+@require_admin_auth
+def view_error_log():
+    """View a specific error log file."""
+    filename = request.args.get('filename')
+    if not filename:
+        return jsonify({'success': False, 'error': 'No filename provided'})
+    
+    try:
+        error_logger = get_error_logger()
+        log_files = error_logger.get_log_files()
+        
+        # Find the requested log file
+        target_file = None
+        for log_file in log_files:
+            if log_file['name'] == filename:
+                target_file = log_file
+                break
+        
+        if not target_file:
+            return jsonify({'success': False, 'error': 'Log file not found'})
+        
+        # Read the file content
+        with open(target_file['path'], 'r') as f:
+            content = f.read()
+        
+        return jsonify({'success': True, 'content': content})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/admin/error-logs/download/<filename>')
+@require_admin_auth
+def download_error_log(filename):
+    """Download a specific error log file."""
+    try:
+        error_logger = get_error_logger()
+        log_files = error_logger.get_log_files()
+        
+        # Find the requested log file
+        target_file = None
+        for log_file in log_files:
+            if log_file['name'] == filename:
+                target_file = log_file
+                break
+        
+        if not target_file:
+            flash('Log file not found', 'error')
+            return redirect(url_for('error_logs'))
+        
+        return send_file(target_file['path'], as_attachment=True, download_name=filename)
+    
+    except Exception as e:
+        flash(f'Error downloading log file: {str(e)}', 'error')
+        return redirect(url_for('error_logs'))
+
+@app.route('/admin/error-logs/download-all')
+@require_admin_auth
+def download_all_error_logs():
+    """Download all error logs as a ZIP file."""
+    import zipfile
+    import tempfile
+    from datetime import datetime
+    
+    try:
+        error_logger = get_error_logger()
+        log_files = error_logger.get_log_files()
+        
+        if not log_files:
+            flash('No log files to download', 'warning')
+            return redirect(url_for('error_logs'))
+        
+        # Create a temporary ZIP file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as temp_zip:
+            with zipfile.ZipFile(temp_zip.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for log_file in log_files:
+                    zipf.write(log_file['path'], log_file['name'])
+            
+            return send_file(temp_zip.name, 
+                           as_attachment=True, 
+                           download_name=f'last_mile_logs_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip')
+    
+    except Exception as e:
+        flash(f'Error creating log archive: {str(e)}', 'error')
+        return redirect(url_for('error_logs'))
