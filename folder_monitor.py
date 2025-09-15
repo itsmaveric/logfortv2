@@ -414,8 +414,23 @@ class FolderMonitor:
             file_state.last_mtime = current_mtime
             file_state.last_seen = datetime.utcnow()
             
-            # Parse new content if file has grown
-            if current_size > file_state.last_offset:
+            # Check if file needs processing: 
+            # 1. File has grown in size, OR 
+            # 2. File modification time has changed (file was modified in place), OR
+            # 3. Force reprocessing if file size is different
+            needs_processing = (
+                current_size > file_state.last_offset or  # File has grown
+                current_size != file_state.last_size or  # File size changed (truncated/replaced)
+                (file_state.last_mtime and current_mtime > file_state.last_mtime)  # File was modified
+            )
+            
+            if needs_processing:
+                # If file was modified but didn't grow, reset offset to reprocess from beginning
+                if current_size <= file_state.last_offset and current_mtime > (file_state.last_mtime or datetime.min):
+                    logger.info(f"File {file_path} was modified - reprocessing from beginning")
+                    file_state.last_offset = 0
+                    tail_parser.reset_buffer()
+                
                 records, new_offset, error = tail_parser.parse_file_tail(
                     file_path, file_state.last_offset
                 )
@@ -430,11 +445,13 @@ class FolderMonitor:
                     if records:
                         saved_count = tail_parser.save_records_batch(records)
                         file_state.records_processed += saved_count
-                        logger.info(f"Processed {saved_count} records from {file_path}")
+                        logger.info(f"Processed {saved_count} records from {file_path} (reprocessing due to file change)")
                 
                 # Update offset
                 file_state.last_offset = new_offset
                 file_state.last_size = current_size
+            else:
+                logger.debug(f"File {file_path} unchanged - skipping processing")
             
             db.session.commit()
             

@@ -117,14 +117,14 @@ def validate_path_access(path, access_mode):
         elif access_mode == 'home_desktop':
             # In desktop mode, allow broader access including network drives
             if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
-                # Desktop mode: Allow any readable directory (trusted environment)
+                # Desktop mode: Allow ANY path (completely permissive for trusted environment)
                 try:
-                    # More permissive - just check if path exists, ignore access checks for network drives
-                    if path and os.path.isdir(path):
+                    # Just try to check if it's a string path - don't even validate existence
+                    if isinstance(path, str) and len(path.strip()) > 0:
                         return True
-                    return os.path.exists(path)
+                    return False
                 except:
-                    # If there's any permission issue, still allow it for desktop mode
+                    # If there's ANY error, still allow it for desktop mode
                     return True
             else:
                 # Web mode: Restrict to home directory and Desktop folder
