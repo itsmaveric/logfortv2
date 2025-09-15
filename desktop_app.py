@@ -5,6 +5,12 @@ Main entry point for the Windows desktop version
 """
 import os
 import sys
+
+# Fix PyWebView debugging issues BEFORE importing webview
+os.environ['REMOTE_DEBUGGING_PORT'] = '0'  # Disable remote debugging
+os.environ['PYTHONHTTPSVERIFY'] = '0'  # Avoid SSL issues in webview
+os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = '--disable-web-security --disable-features=VizDisplayCompositor'
+
 import json
 import threading
 import time
@@ -122,9 +128,7 @@ class DesktopApp:
         os.environ['UPLOADS_FOLDER'] = str(self.config.uploads_dir)
         os.environ['LOGS_FOLDER'] = str(self.config.logs_dir)
         
-        # Fix PyWebView debugging issues
-        os.environ['REMOTE_DEBUGGING_PORT'] = '0'  # Disable remote debugging
-        os.environ['PYTHONHTTPSVERIFY'] = '0'  # Avoid SSL issues in webview
+        # Additional desktop environment setup (REMOTE_DEBUGGING_PORT already set at module level)
         
         # Set admin password hash if available
         if self.config.config.get('admin_password_hash'):
