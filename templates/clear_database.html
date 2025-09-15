@@ -28,6 +28,8 @@
                     </div>
 
                     <form method="POST" id="clearForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        
                         <div class="mb-4">
                             <h6>Select what to clear:</h6>
                             
@@ -65,14 +67,10 @@
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label"><strong>Confirmation Required:</strong></label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="confirmCheck" onchange="updateConfirmButton()">
-                                <label class="form-check-label" for="confirmCheck">
-                                    I understand this action cannot be undone
-                                </label>
-                            </div>
-                            <input type="hidden" name="confirm" id="confirmInput" value="">
+                            <label class="form-label"><strong>Security Confirmation Required:</strong></label>
+                            <p class="text-muted small mb-2">Type <code>DELETE</code> (all capitals) to confirm this destructive action:</p>
+                            <input type="text" class="form-control" name="confirm_phrase" id="confirmPhrase" 
+                                   placeholder="Type DELETE to confirm" onkeyup="updateConfirmButton()" autocomplete="off">
                         </div>
 
                         <button type="submit" class="btn btn-danger" id="clearButton" disabled>
@@ -121,17 +119,14 @@
 
 <script>
 function updateConfirmButton() {
-    const checkbox = document.getElementById('confirmCheck');
     const button = document.getElementById('clearButton');
-    const confirmInput = document.getElementById('confirmInput');
+    const confirmPhrase = document.getElementById('confirmPhrase');
     const actionSelected = document.querySelector('input[name="action"]:checked');
     
-    if (checkbox.checked && actionSelected) {
+    if (confirmPhrase.value === 'DELETE' && actionSelected) {
         button.disabled = false;
-        confirmInput.value = 'yes';
     } else {
         button.disabled = true;
-        confirmInput.value = '';
     }
 }
 
@@ -140,17 +135,25 @@ document.querySelectorAll('input[name="action"]').forEach(radio => {
     radio.addEventListener('change', updateConfirmButton);
 });
 
-// Confirmation dialog
+// Final confirmation dialog
 document.getElementById('clearForm').addEventListener('submit', function(e) {
     const actionSelected = document.querySelector('input[name="action"]:checked');
+    const confirmPhrase = document.getElementById('confirmPhrase');
+    
     if (!actionSelected) {
         e.preventDefault();
         alert('Please select an action to perform.');
         return;
     }
     
+    if (confirmPhrase.value !== 'DELETE') {
+        e.preventDefault();
+        alert('You must type DELETE in the confirmation field.');
+        return;
+    }
+    
     const actionText = actionSelected.nextElementSibling.querySelector('strong').textContent;
-    if (!confirm(`Are you absolutely sure you want to clear: ${actionText}?\n\nThis action cannot be undone!`)) {
+    if (!confirm(`FINAL CONFIRMATION:\n\nYou are about to clear: ${actionText}\n\nThis action CANNOT be undone!\n\nClick OK to proceed or Cancel to abort.`)) {
         e.preventDefault();
     }
 });
