@@ -3,22 +3,38 @@
 Last Mile Tracking System - Desktop Application
 Main entry point for the Windows desktop version
 """
+
+# CRITICAL: Set ALL environment variables FIRST, before any other imports
 import os
 import sys
 
-# Fix PyWebView debugging issues BEFORE importing webview
-os.environ['REMOTE_DEBUGGING_PORT'] = '0'  # Disable remote debugging
-os.environ['PYTHONHTTPSVERIFY'] = '0'  # Avoid SSL issues in webview
-os.environ['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = '--disable-web-security --disable-features=VizDisplayCompositor'
+# Environment variables that MUST be set before importing pywebview
+# Remove REMOTE_DEBUGGING_PORT as it causes Python runtime issues
+os.environ.setdefault('PYTHONHTTPSVERIFY', '0')
+os.environ.setdefault('WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS', '--disable-web-security --disable-features=VizDisplayCompositor --disable-dev-shm-usage --no-sandbox')
+os.environ.setdefault('WEBVIEW2_USER_DATA_FOLDER', os.path.join(os.environ.get('APPDATA', '.'), 'LastMileTracking', 'webview2'))
+os.environ.setdefault('PYWEBVIEW_LOG', '0')
 
+# Now safe to import other modules
 import json
 import threading
 import time
 import logging
+import secrets
 from pathlib import Path
-import webview
-from waitress import serve
-from werkzeug.serving import make_ssl_devcert
+
+# Import pywebview last, after all environment variables are set
+try:
+    import webview
+except ImportError:
+    print("Error: pywebview not installed. Run: pip install pywebview")
+    sys.exit(1)
+
+try:
+    from waitress import serve
+except ImportError:
+    print("Error: waitress not installed. Run: pip install waitress")
+    sys.exit(1)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -86,7 +102,6 @@ class DesktopConfig:
     
     def _generate_secret_key(self):
         """Generate a random secret key"""
-        import secrets
         return secrets.token_hex(32)
     
     def set_admin_password(self, password):
@@ -128,7 +143,7 @@ class DesktopApp:
         os.environ['UPLOADS_FOLDER'] = str(self.config.uploads_dir)
         os.environ['LOGS_FOLDER'] = str(self.config.logs_dir)
         
-        # Additional desktop environment setup (REMOTE_DEBUGGING_PORT already set at module level)
+        # Additional desktop environment setup
         
         # Set admin password hash if available
         if self.config.config.get('admin_password_hash'):
@@ -165,8 +180,7 @@ class DesktopApp:
             
             # Wait for server to start
             import requests
-            max_attempts = 30
-            for attempt in range(max_attempts):
+            for attempt in range(30):
                 try:
                     response = requests.get(url, timeout=1)
                     if response.status_code == 200:
@@ -258,18 +272,16 @@ class DesktopApp:
                     'OPEN_DEVTOOLS_IN_DEBUG': False
                 }
                 
-                # Start webview (blocking call) with error handling
+                # Simple webview start - minimal configuration to avoid errors
                 try:
-                    webview.start(
-                        debug=False, 
-                        user_agent='LastMileTracking-Desktop/1.0',
-                        private_mode=True,  # Run in private mode to avoid cache issues
-                        storage_path=str(self.config.config_dir)  # Set storage path
-                    )
-                except Exception as webview_error:
-                    logger.error(f"WebView start error: {webview_error}")
-                    # Fallback: try with minimal settings
                     webview.start(debug=False)
+                except Exception as webview_error:
+                    logger.error(f"WebView error: {webview_error}")
+                    # Open in browser as fallback
+                    import webbrowser
+                    url = f"http://{self.config.config['host']}:{self.config.config['port']}"
+                    webbrowser.open(url)
+                    input("Press Enter to exit...")
             
             self.shutdown()
             
