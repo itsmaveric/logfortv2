@@ -485,7 +485,9 @@ def monitor_settings():
     """Configure monitor settings."""
     if request.method == 'POST':
         folder_path = request.form.get('folder_path', '').strip()
-        access_mode = request.form.get('access_mode', 'safe')
+        # In desktop mode, use unrestricted access by default, otherwise use safe mode
+        default_mode = 'unrestricted' if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true' else 'safe'
+        access_mode = request.form.get('access_mode', default_mode)
         include_patterns = request.form.get('include_patterns', '*.txt,*.log').strip()
         exclude_patterns = request.form.get('exclude_patterns', '').strip()
         polling_interval = int(request.form.get('polling_interval', 10))
@@ -500,18 +502,20 @@ def monitor_settings():
             flash('Folder path is required', 'error')
             return redirect(url_for('monitor_settings'))
         
-        # Validate path based on access mode
-        if not validate_path_access(folder_path, access_mode):
-            if access_mode == 'safe':
-                flash('Folder path is not allowed for security reasons. Only paths under /tmp or current working directory are permitted.', 'error')
-            elif access_mode == 'home_desktop':
-                if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
-                    flash('Invalid folder path or access denied. Please check the path exists and is readable.', 'error')
-                else:
+        # In desktop mode, completely bypass path validation for trusted environment
+        if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
+            # Desktop mode: Skip all path validation checks (trusted local environment)
+            logger.info(f"Desktop mode: Allowing folder path {folder_path} without security restrictions")
+        else:
+            # Web mode: Apply normal validation
+            if not validate_path_access(folder_path, access_mode):
+                if access_mode == 'safe':
+                    flash('Folder path is not allowed for security reasons. Only paths under /tmp or current working directory are permitted.', 'error')
+                elif access_mode == 'home_desktop':
                     flash('Desktop folder access is restricted to your home Desktop directory only.', 'error')
-            else:
-                flash('Invalid folder path or access denied.', 'error')
-            return redirect(url_for('monitor_settings'))
+                else:
+                    flash('Invalid folder path or access denied.', 'error')
+                return redirect(url_for('monitor_settings'))
         
         if not os.path.exists(folder_path):
             flash(f'Folder path does not exist: {folder_path}', 'error')
