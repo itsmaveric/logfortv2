@@ -153,9 +153,7 @@ def validate_path_access(path, access_mode):
 @app.route('/admin/first-run', methods=['GET', 'POST'])
 def first_run_setup():
     """First run setup for admin password."""
-    # Security: Only allow in desktop mode
-    if os.environ.get('DESKTOP_MODE', 'false').lower() != 'true':
-        abort(404)  # Hide the route in web mode
+    # Allow first-run setup in both desktop and web mode if no password is set
     
     # Check if already set up
     if os.environ.get('ADMIN_PASSWORD_HASH'):
@@ -201,11 +199,8 @@ def admin_login():
     """Admin login page."""
     # Check if first run setup needed
     if not os.environ.get('ADMIN_PASSWORD_HASH'):
-        if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
-            return redirect(url_for('first_run_setup'))
-        else:
-            flash('System not properly configured. Please contact administrator.', 'error')
-            return render_template('admin_login.html')
+        # Always redirect to first-run setup if no password is set
+        return redirect(url_for('first_run_setup'))
     
     if request.method == 'POST':
         password = request.form.get('password', '')
