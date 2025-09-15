@@ -111,7 +111,7 @@ hiddenimports = [
 
 # Analysis configuration
 a = Analysis(
-    ['desktop_app.py'],
+    ['desktop_app_fixed.py'],
     pathex=[workpath],
     binaries=[],
     datas=datas,

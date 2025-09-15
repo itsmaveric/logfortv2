@@ -42,7 +42,7 @@ def start_server_only():
     """Start only the Flask server without GUI"""
     try:
         print("\n=== Starting server-only mode ===")
-        from desktop_app import DesktopApp
+        from desktop_app_fixed import DesktopApp
         
         # Create app but override the run method
         app = DesktopApp()
@@ -83,7 +83,7 @@ def try_desktop_mode():
         set_safe_environment()
         
         # Import and run desktop app
-        from desktop_app import main
+        from desktop_app_fixed import main
         main()
         return True
         

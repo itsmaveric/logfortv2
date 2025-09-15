@@ -5,7 +5,7 @@ Test script for desktop configuration system
 import os
 import tempfile
 from pathlib import Path
-from desktop_app import DesktopConfig
+from desktop_app_fixed import DesktopConfig
 
 def test_desktop_config():
     """Test the desktop configuration system"""
