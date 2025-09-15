@@ -154,9 +154,59 @@ def validate_path_access(path, access_mode):
         return False
 
 # Authentication routes
+@app.route('/admin/first-run', methods=['GET', 'POST'])
+def first_run_setup():
+    """First run setup for admin password."""
+    # Check if already set up
+    if os.environ.get('ADMIN_PASSWORD_HASH'):
+        return redirect(url_for('admin_login'))
+    
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        if len(password) < 6:
+            flash('Password must be at least 6 characters long', 'error')
+            return render_template('first_run_setup.html')
+        
+        if password != confirm_password:
+            flash('Passwords do not match', 'error')
+            return render_template('first_run_setup.html')
+        
+        try:
+            # Set password in desktop config if in desktop mode
+            if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
+                # Import desktop app config
+                from desktop_app import DesktopConfig
+                config = DesktopConfig()
+                config.set_admin_password(password)
+                
+                # Update environment variable for current session
+                os.environ['ADMIN_PASSWORD_HASH'] = config.config['admin_password_hash']
+            else:
+                # For web mode, just set environment variable
+                from werkzeug.security import generate_password_hash
+                os.environ['ADMIN_PASSWORD_HASH'] = generate_password_hash(password)
+            
+            flash('Admin password set successfully! You can now log in.', 'success')
+            return redirect(url_for('admin_login'))
+            
+        except Exception as e:
+            flash(f'Error setting up password: {str(e)}', 'error')
+    
+    return render_template('first_run_setup.html')
+
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Admin login page."""
+    # Check if first run setup needed
+    if not os.environ.get('ADMIN_PASSWORD_HASH'):
+        if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
+            return redirect(url_for('first_run_setup'))
+        else:
+            flash('System not properly configured. Please contact administrator.', 'error')
+            return render_template('admin_login.html')
+    
     if request.method == 'POST':
         password = request.form.get('password', '')
         
