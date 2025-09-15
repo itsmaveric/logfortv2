@@ -68,7 +68,7 @@ class MonitoredFolder(db.Model):
     last_run_at = db.Column(db.DateTime, nullable=True)
     
     # New fields for enhanced functionality
-    access_mode = db.Column(db.String(20), nullable=False, default='safe')  # safe, home_desktop, unrestricted
+    access_mode = db.Column(db.String(20), nullable=False, default='home_desktop')  # safe, home_desktop, unrestricted
     rotation_base = db.Column(db.String(255), nullable=True)  # e.g., 'log_tracktrace.log'
     rotation_max = db.Column(db.Integer, nullable=False, default=10)  # max .1, .2, ..., .N files
     schedule_enabled = db.Column(db.Boolean, nullable=False, default=False)  # scheduled vs continuous
