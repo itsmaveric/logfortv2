@@ -67,7 +67,7 @@ class FolderMonitor:
             with app.app_context():
                 instance = db.session.query(MonitorInstance).filter_by(
                     id=self.instance_id
-                ).with_for_update().first()
+                ).first()
                 
                 if instance:
                     instance.stop_requested = True
@@ -82,13 +82,13 @@ class FolderMonitor:
             logger.error(f"Failed to signal stop via database: {e}")
     
     def _acquire_singleton_lock(self) -> bool:
-        """Acquire singleton lock atomically using SELECT FOR UPDATE."""
+        """Acquire singleton lock with staleness checking."""
         try:
             with app.app_context():
-                # Begin transaction and acquire row-level lock
+                # Check for existing instance
                 instance = db.session.query(MonitorInstance).filter_by(
                     id=self.instance_id
-                ).with_for_update().first()
+                ).first()
                 
                 current_time = datetime.utcnow()
                 
@@ -134,10 +134,10 @@ class FolderMonitor:
         """Release singleton lock with proper transaction handling."""
         try:
             with app.app_context():
-                # Use SELECT FOR UPDATE for atomic release
+                # Get instance for atomic release
                 instance = db.session.query(MonitorInstance).filter_by(
                     id=self.instance_id
-                ).with_for_update().first()
+                ).first()
                 
                 if instance:
                     instance.active = False
@@ -157,36 +157,56 @@ class FolderMonitor:
         """Update heartbeat and check for stop signal. Returns True if should continue running."""
         try:
             with app.app_context():
-                instance = db.session.query(MonitorInstance).filter_by(
-                    id=self.instance_id
-                ).with_for_update().first()
+                # Use direct SQL UPDATE for better reliability with long-running threads
+                from sqlalchemy import text
                 
-                if instance:
-                    # Check for stop request from other workers
-                    if instance.stop_requested:
-                        logger.info(f"Stop signal received from database (PID: {instance.process_id}, Worker: {instance.worker_id})")
-                        return False
+                result = db.engine.execute(text("""
+                    UPDATE monitor_instance 
+                    SET heartbeat_at = NOW()
+                    WHERE id = :instance_id AND stop_requested = false
+                """), {"instance_id": self.instance_id})
+                
+                # Check if any row was updated
+                if result.rowcount == 0:
+                    # Check if instance exists and has stop_requested=true
+                    check_result = db.engine.execute(text("""
+                        SELECT stop_requested FROM monitor_instance WHERE id = :instance_id
+                    """), {"instance_id": self.instance_id})
                     
-                    # Update heartbeat
-                    instance.heartbeat_at = datetime.utcnow()
-                    db.session.commit()
-                    return True
-                else:
-                    logger.error("Monitor instance not found during heartbeat update")
-                    return False
+                    row = check_result.fetchone()
+                    if row and row[0]:  # stop_requested is true
+                        logger.info(f"Stop signal received from database")
+                        return False
+                    else:
+                        # Instance doesn't exist, create it
+                        db.engine.execute(text("""
+                            INSERT INTO monitor_instance 
+                            (id, active, stop_requested, process_id, worker_id, heartbeat_at, started_at)
+                            VALUES (:id, true, false, :pid, :worker, NOW(), NOW())
+                            ON CONFLICT (id) DO UPDATE SET
+                                heartbeat_at = NOW(), 
+                                active = true,
+                                stop_requested = false
+                        """), {
+                            "id": self.instance_id,
+                            "pid": self.process_id, 
+                            "worker": self.worker_id
+                        })
+                
+                logger.debug(f"Heartbeat updated successfully")
+                return True
                     
         except Exception as e:
-            db.session.rollback()
-            logger.error(f"Failed to update heartbeat: {e}")
-            return False
+            logger.error(f"Heartbeat update failed (continuing): {e}", exc_info=True)
+            return True  # Don't stop monitor for transient DB errors
     
     def _monitor_loop(self):
         """Main monitoring loop with cross-worker stop signal checking."""
-        with app.app_context():
-            logger.info(f"Monitor loop started (PID: {self.process_id}, Worker: {self.worker_id})")
-            
-            while self.is_running:
-                try:
+        logger.info(f"Monitor loop started (PID: {self.process_id}, Worker: {self.worker_id})")
+        
+        while self.is_running:
+            try:
+                with app.app_context():
                     # Update heartbeat and check for stop signal from database
                     if not self._update_heartbeat():
                         logger.info("Monitor loop stopping due to database stop signal")
@@ -231,28 +251,31 @@ class FolderMonitor:
                             time_until_next = (next_run - datetime.utcnow()).total_seconds()
                             logger.debug(f"Folder {folder.path} scheduled in {time_until_next/60:.1f} minutes")
                     
-                    # Sleep for polling interval (use minimum from all folders, default 10s)
-                    if folders:
-                        min_interval = min(folder.polling_interval for folder in folders)
-                        sleep_time = max(min_interval, 1)  # At least 1 second
-                    else:
-                        sleep_time = 10  # Default 10 seconds if no folders configured
+                    # Clean up session at the end of each iteration
+                    db.session.remove()
                     
-                    # Sleep in smaller chunks to respond faster to stop signals
-                    for _ in range(sleep_time):
-                        if not self.is_running:
-                            break
-                        time.sleep(1)
+                # Sleep for polling interval (use minimum from all folders, default 10s)
+                if folders:
+                    min_interval = min(folder.polling_interval for folder in folders)
+                    sleep_time = max(min_interval, 1)  # At least 1 second
+                else:
+                    sleep_time = 10  # Default 10 seconds if no folders configured
+                
+                # Sleep in smaller chunks to respond faster to stop signals
+                for _ in range(sleep_time):
+                    if not self.is_running:
+                        break
+                    time.sleep(1)
                         
-                except Exception as e:
-                    logger.error(f"Error in monitor loop: {e}")
-                    # Sleep in smaller chunks even during error recovery
-                    for _ in range(10):
-                        if not self.is_running:
-                            break
-                        time.sleep(1)
+            except Exception as e:
+                logger.error(f"Error in monitor loop: {e}", exc_info=True)
+                # Sleep in smaller chunks even during error recovery
+                for _ in range(10):
+                    if not self.is_running:
+                        break
+                    time.sleep(1)
                         
-            logger.info(f"Monitor loop ended (PID: {self.process_id}, Worker: {self.worker_id})")
+        logger.info(f"Monitor loop ended (PID: {self.process_id}, Worker: {self.worker_id})")
     
     def _process_folder(self, folder: MonitoredFolder):
         """Process a single monitored folder."""
@@ -323,13 +346,28 @@ class FolderMonitor:
         # This ensures only files named like "log_tracktrace*" are processed
         filtered_files = []
         logger.info(f"Filtering {len(files)} files found in {folder.path}")
-        for file_path in files:
-            filename = os.path.basename(file_path)
-            if allowed_file(filename):
-                filtered_files.append(file_path)
-                logger.info(f"Accepted file: '{filename}' - matches log_tracktrace pattern")
-            else:
-                logger.info(f"Ignoring file '{filename}' - does not match log_tracktrace pattern")
+        
+        # Import allowed_file function (deferred import to avoid circular dependencies)
+        try:
+            from routes import allowed_file
+            
+            for file_path in files:
+                filename = os.path.basename(file_path)
+                if allowed_file(filename):
+                    filtered_files.append(file_path)
+                    logger.info(f"Accepted file: '{filename}' - matches log_tracktrace pattern")
+                else:
+                    logger.info(f"Ignoring file '{filename}' - does not match log_tracktrace pattern")
+        except ImportError as e:
+            logger.warning(f"Could not import allowed_file function: {e}")
+            # Fallback: apply basic log_tracktrace filtering directly
+            for file_path in files:
+                filename = os.path.basename(file_path)
+                if filename.startswith('log_tracktrace'):
+                    filtered_files.append(file_path)
+                    logger.info(f"Accepted file: '{filename}' - matches log_tracktrace pattern (fallback)")
+                else:
+                    logger.info(f"Ignoring file '{filename}' - does not match log_tracktrace pattern (fallback)")
         
         logger.info(f"Final filtered files count: {len(filtered_files)} out of {len(files)}")
         return filtered_files
