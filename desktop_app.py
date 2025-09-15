@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-REFLIV Tracking System - Desktop Application
+Last Mile Tracking System - Desktop Application
 Main entry point for the Windows desktop version
 """
 import os
@@ -29,7 +29,7 @@ class DesktopConfig:
     
     def __init__(self):
         self.app_name = "Last Mile Tracking"
-        self.config_dir = Path(os.environ.get('APPDATA', '.')) / 'REFLIV'
+        self.config_dir = Path(os.environ.get('APPDATA', '.')) / 'LastMileTracking'
         self.config_file = self.config_dir / 'config.json'
         self.db_file = self.config_dir / 'tracking.db'
         self.uploads_dir = self.config_dir / 'uploads'
@@ -262,7 +262,7 @@ class DesktopApp:
                 try:
                     webview.start(
                         debug=False, 
-                        user_agent='REFLIV-Desktop/1.0',
+                        user_agent='LastMileTracking-Desktop/1.0',
                         private_mode=True,  # Run in private mode to avoid cache issues
                         storage_path=str(self.config.config_dir)  # Set storage path
                     )
