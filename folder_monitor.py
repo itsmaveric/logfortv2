@@ -322,13 +322,16 @@ class FolderMonitor:
         # CRITICAL: Apply strict log_tracktrace filename filtering to ALL files
         # This ensures only files named like "log_tracktrace*" are processed
         filtered_files = []
+        logger.info(f"Filtering {len(files)} files found in {folder.path}")
         for file_path in files:
             filename = os.path.basename(file_path)
             if allowed_file(filename):
                 filtered_files.append(file_path)
+                logger.info(f"Accepted file: '{filename}' - matches log_tracktrace pattern")
             else:
-                logger.debug(f"Ignoring file '{filename}' - does not match log_tracktrace pattern")
+                logger.info(f"Ignoring file '{filename}' - does not match log_tracktrace pattern")
         
+        logger.info(f"Final filtered files count: {len(filtered_files)} out of {len(files)}")
         return filtered_files
     
     def _enforce_max_files(self, folder: MonitoredFolder, current_files: List[str]):

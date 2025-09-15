@@ -66,7 +66,7 @@
                         <tbody>
                             {% for record in records %}
                             <tr>
-                                <td><a href="{{ url_for('reference_detail', reference=record.reference_number) }}" class="text-decoration-none">{{ record.reference_number }}</a></td>
+                                <td><a href="{{ url_for('reference_detail', reference_number=record.reference_number) }}" class="text-decoration-none">{{ record.reference_number }}</a></td>
                                 <td>{{ record.shipping_unit_reference or 'N/A' }}</td>
                                 <td>
                                     <span class="badge {% if 'deliver' in record.status.lower() %}bg-success{% elif 'transit' in record.status.lower() %}bg-warning{% else %}bg-secondary{% endif %}">

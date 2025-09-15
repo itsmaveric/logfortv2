@@ -1,0 +1,83 @@
+2025-09-15 13:02:33,992 - ERROR - Exception on /tracking [GET]
+Traceback (most recent call last):
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\Downloads\logfortv4\logfort\routes.py", line 405, in tracking
+    return render_template('tracking.html',
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\templating.py", line 150, in render_template
+    return _render(app, template, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\templating.py", line 131, in _render
+    rv = template.render(context)
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\jinja2\environment.py", line 1295, in render
+    self.environment.handle_exception()
+  File "\AppData\Roaming\Python\Python311\site-packages\jinja2\environment.py", line 942, in handle_exception
+    raise rewrite_traceback_stack(source=source)
+  File "\Downloads\logfortv4\logfort\templates\tracking.html", line 1, in top-level template code
+    {% extends "base.html" %}
+  File "\Downloads\logfortv4\logfort\templates\base.html", line 73, in top-level template code
+    {% block content %}{% endblock %}
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\Downloads\logfortv4\logfort\templates\tracking.html", line 69, in block 'content'
+    <td><a href="{{ url_for('reference_detail', reference=record.reference_number) }}" class="text-decoration-none">{{ record.reference_number }}</a></td>
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 1121, in url_for
+    return self.handle_url_build_error(error, endpoint, values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 1110, in url_for
+    rv = url_adapter.build(  # type: ignore[union-attr]
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\werkzeug\routing\map.py", line 924, in build
+    raise BuildError(endpoint, values, method, self)
+werkzeug.routing.exceptions.BuildError: Could not build url for endpoint 'reference_detail' with values ['reference']. Did you forget to specify values ['reference_number']?
+2025-09-15 13:02:35,461 - ERROR - Exception on /analytics [GET]
+Traceback (most recent call last):
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\Downloads\logfortv4\logfort\routes.py", line 629, in analytics
+    return render_template('analytics.html',
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\templating.py", line 150, in render_template
+    return _render(app, template, context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\flask\templating.py", line 131, in _render
+    rv = template.render(context)
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\jinja2\environment.py", line 1295, in render
+    self.environment.handle_exception()
+  File "\AppData\Roaming\Python\Python311\site-packages\jinja2\environment.py", line 942, in handle_exception
+    raise rewrite_traceback_stack(source=source)
+  File "\Downloads\logfortv4\logfort\templates\analytics.html", line 1, in top-level template code
+    {% extends "base.html" %}
+  File "\Downloads\logfortv4\logfort\templates\base.html", line 80, in top-level template code
+    {% block scripts %}{% endblock %}
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\Downloads\logfortv4\logfort\templates\analytics.html", line 355, in block 'scripts'
+    const activityDates = [{% for item in daily_volume %}"{{ item.date.strftime('%m/%d') }}"{% if not loop.last %},{% endif %}{% endfor %}];
+    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "\AppData\Roaming\Python\Python311\site-packages\jinja2\utils.py", line 92, in from_obj
+    if hasattr(obj, "jinja_pass_arg"):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+jinja2.exceptions.UndefinedError: 'str object' has no attribute 'strftime'
