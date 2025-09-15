@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 ALLOWED_EXTENSIONS = {'log'}
 
 def allowed_file(filename):
-    """Check if file matches log_tracktrace pattern with .log, .log.1, .log.2, etc."""
+    """Check if file matches log_tracktrace pattern with .log, .log.1, .log.2, etc.
+    Supports real-world patterns like: log_tracktrace.log, log_tracktrace.log.1, 
+    log_tracktrace.log_timestamp.1, etc."""
     if not filename:
         return False
     
@@ -23,16 +25,17 @@ def allowed_file(filename):
     if 'log_tracktrace' not in filename.lower():
         return False
     
-    # Check if ends with .log or .log.N (N = 1-10)
     filename_lower = filename.lower()
+    
+    # Check if ends with .log
     if filename_lower.endswith('.log'):
         return True
     
-    # Check for .log.N pattern
-    parts = filename_lower.split('.')
-    if len(parts) >= 3 and parts[-2] == 'log':
+    # Check for rotation patterns (.1 through .10 at the end)
+    # This handles: log_tracktrace.log.1, log_tracktrace.log_timestamp.1, etc.
+    if filename_lower.split('.')[-1].isdigit():
         try:
-            log_num = int(parts[-1])
+            log_num = int(filename_lower.split('.')[-1])
             return 1 <= log_num <= 10
         except ValueError:
             return False
