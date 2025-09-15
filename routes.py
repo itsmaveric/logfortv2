@@ -322,15 +322,20 @@ def upload_file():
                                 else:
                                     clean_data[key] = value
                             
-                            # Simplified duplicate check (just reference number for performance)
+                            # Use composite duplicate check to allow multiple records per reference
                             existing = ReflixTracking.query.filter_by(
-                                reference_number=clean_data['reference_number']
+                                reference_number=clean_data['reference_number'],
+                                status=clean_data['status'],
+                                timestamp=clean_data['timestamp'],
+                                log_file_name=clean_data['log_file_name']
                             ).first()
                             
                             if not existing:
                                 tracking_record = ReflixTracking(**clean_data)
                                 db.session.add(tracking_record)
                                 records_saved += 1
+                            else:
+                                logger.debug(f"Skipping duplicate record: {clean_data['reference_number']} - {clean_data['status']}")
                                 
                             # Commit in batches to avoid timeout
                             if (i + 1) % batch_size == 0:

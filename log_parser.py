@@ -117,14 +117,40 @@ class ReflixLogParser:
             
             root = ET.fromstring(xml_data)
             
-            # Only check for main stateData (overall order status)
-            main_state_data = root.find('.//requestedData/stateData')
-            if main_state_data is not None:
-                record = self._extract_state_record(
-                    main_state_data, reference_number, None, filename, log_timestamp
-                )
-                if record:
-                    records.append(record)
+            # Extract shipping units (individual packages)
+            shipping_units = root.findall('.//shippingUnits')
+            if shipping_units:
+                for unit in shipping_units:
+                    unit_ref_elem = unit.find('referenceNumber')
+                    unit_ref = unit_ref_elem.text if unit_ref_elem is not None else None
+                    
+                    # Get current state
+                    current_state = unit.find('stateData')
+                    if current_state is not None:
+                        record = self._extract_state_record(
+                            current_state, reference_number, unit_ref, filename, log_timestamp
+                        )
+                        if record:
+                            records.append(record)
+                            
+                            # Extract status history as separate records
+                            history_elements = unit.findall('stateDataHistory')
+                            for history in history_elements:
+                                history_record = self._extract_state_record(
+                                    history, reference_number, unit_ref, filename, log_timestamp, is_history=True
+                                )
+                                if history_record:
+                                    records.append(history_record)
+            
+            # If no shipping units found, try main stateData (fallback)
+            if not records:
+                main_state_data = root.find('.//requestedData/stateData')
+                if main_state_data is not None:
+                    record = self._extract_state_record(
+                        main_state_data, reference_number, None, filename, log_timestamp
+                    )
+                    if record:
+                        records.append(record)
                         
         except ET.ParseError as e:
             logger.error(f"XML parsing error for reference {reference_number}: {e}")
@@ -134,7 +160,7 @@ class ReflixLogParser:
             
         return records
     
-    def _extract_state_record(self, state_element, reference_number, unit_ref, filename, log_timestamp):
+    def _extract_state_record(self, state_element, reference_number, unit_ref, filename, log_timestamp, is_history=False):
         """Extract a single state record from XML element"""
         try:
             title_elem = state_element.find('title')
