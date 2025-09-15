@@ -188,7 +188,7 @@ def first_run_setup():
             # Set password in desktop config if in desktop mode
             if os.environ.get('DESKTOP_MODE', 'false').lower() == 'true':
                 # Import desktop app config
-                from desktop_app import DesktopConfig
+                from desktop_app_fixed import DesktopConfig
                 config = DesktopConfig()
                 config.set_admin_password(password)
                 

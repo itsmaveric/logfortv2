@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 if __name__ == '__main__':
     try:
-        from desktop_app import main
+        from desktop_app_fixed import main
         main()
     except KeyboardInterrupt:
         print("\nApplication interrupted by user")
