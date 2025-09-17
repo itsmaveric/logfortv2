@@ -12,6 +12,15 @@ from tail_parser import TailParser
 
 logger = logging.getLogger(__name__)
 
+# Import event publisher (with circular import protection)
+def get_event_publisher():
+    """Lazy import to avoid circular imports"""
+    try:
+        from routes import publish_monitor_event
+        return publish_monitor_event
+    except ImportError:
+        return lambda *args, **kwargs: None  # No-op if routes not available
+
 class FolderMonitor:
     """
     Background service that monitors folders for REFLIV log files,
@@ -418,8 +427,22 @@ class FolderMonitor:
                 file_state.last_size = 0
                 file_state.last_offset = 0
                 file_state.generation = 1
+                file_state.stage = 'DETECTED'
                 db.session.add(file_state)
                 db.session.commit()
+                
+                # Emit file detected event
+                publish_event = get_event_publisher()
+                publish_event(
+                    event_type='file_detected',
+                    message=f'New file detected: {os.path.basename(file_path)}',
+                    level='INFO',
+                    folder_id=folder.id,
+                    file_id=file_state.id,
+                    file_path=file_path,
+                    stage='DETECTED',
+                    worker_id=self.worker_id
+                )
             
             # Get or create file-specific TailParser instance
             if file_path not in self.tail_parsers:
@@ -440,8 +463,22 @@ class FolderMonitor:
                 logger.info(f"File rotation detected for {file_path}")
                 file_state.last_offset = 0
                 file_state.generation += 1
+                file_state.stage = 'DETECTED'
                 # Reset only this file's TailParser buffer
                 tail_parser.reset_buffer()
+                
+                # Emit file rotation event
+                publish_event = get_event_publisher()
+                publish_event(
+                    event_type='file_rotation',
+                    message=f'File rotation detected: {os.path.basename(file_path)} (generation {file_state.generation})',
+                    level='INFO',
+                    folder_id=folder.id,
+                    file_id=file_state.id,
+                    file_path=file_path,
+                    stage='DETECTED',
+                    worker_id=self.worker_id
+                )
             
             # Update file state
             file_state.inode = current_inode
@@ -459,10 +496,33 @@ class FolderMonitor:
             )
             
             if needs_processing:
+                # Update state to processing
+                file_state.stage = 'PROCESSING'
+                file_state.total_bytes = current_size
+                file_state.bytes_read = file_state.last_offset
+                file_state.last_activity_at = datetime.utcnow()
+                db.session.commit()
+                
+                # Emit processing start event
+                publish_event = get_event_publisher()
+                publish_event(
+                    event_type='file_processing',
+                    message=f'Processing file: {os.path.basename(file_path)}',
+                    level='INFO',
+                    folder_id=folder.id,
+                    file_id=file_state.id,
+                    file_path=file_path,
+                    stage='PROCESSING',
+                    bytes_read=file_state.bytes_read,
+                    total_bytes=file_state.total_bytes,
+                    worker_id=self.worker_id
+                )
+                
                 # If file was modified but didn't grow, reset offset to reprocess from beginning
                 if current_size <= file_state.last_offset and current_mtime > (file_state.last_mtime or datetime.min):
                     logger.info(f"File {file_path} was modified - reprocessing from beginning")
                     file_state.last_offset = 0
+                    file_state.bytes_read = 0
                     tail_parser.reset_buffer()
                 
                 records, new_offset, error = tail_parser.parse_file_tail(
@@ -471,7 +531,22 @@ class FolderMonitor:
                 
                 if error:
                     file_state.last_error = error
+                    file_state.stage = 'ERROR'
                     logger.error(f"Error parsing {file_path}: {error}")
+                    
+                    # Emit error event
+                    publish_event = get_event_publisher()
+                    publish_event(
+                        event_type='error',
+                        message=f'Error processing {os.path.basename(file_path)}: {error}',
+                        level='ERROR',
+                        folder_id=folder.id,
+                        file_id=file_state.id,
+                        file_path=file_path,
+                        stage='ERROR',
+                        error_detail=error,
+                        worker_id=self.worker_id
+                    )
                 else:
                     file_state.last_error = None
                     
@@ -479,11 +554,48 @@ class FolderMonitor:
                     if records:
                         saved_count = tail_parser.save_records_batch(records)
                         file_state.records_processed += saved_count
-                        logger.info(f"Processed {saved_count} records from {file_path} (reprocessing due to file change)")
+                        file_state.records_extracted += saved_count
+                        logger.info(f"Processed {saved_count} records from {file_path}")
+                        
+                        # Emit batch completion event
+                        publish_event = get_event_publisher()
+                        publish_event(
+                            event_type='batch_complete',
+                            message=f'Processed batch: {saved_count} records from {os.path.basename(file_path)}',
+                            level='INFO',
+                            folder_id=folder.id,
+                            file_id=file_state.id,
+                            file_path=file_path,
+                            stage='PROCESSING',
+                            bytes_read=new_offset,
+                            total_bytes=current_size,
+                            records_extracted=saved_count,
+                            worker_id=self.worker_id
+                        )
                 
-                # Update offset
+                # Update offset and mark as completed
                 file_state.last_offset = new_offset
                 file_state.last_size = current_size
+                file_state.bytes_read = new_offset
+                file_state.stage = 'COMPLETED' if not error else 'ERROR'
+                file_state.last_activity_at = datetime.utcnow()
+                
+                # Emit file completion event
+                if not error:
+                    publish_event = get_event_publisher()
+                    publish_event(
+                        event_type='file_completed',
+                        message=f'Completed processing: {os.path.basename(file_path)}',
+                        level='INFO',
+                        folder_id=folder.id,
+                        file_id=file_state.id,
+                        file_path=file_path,
+                        stage='COMPLETED',
+                        bytes_read=new_offset,
+                        total_bytes=current_size,
+                        records_extracted=file_state.records_extracted,
+                        worker_id=self.worker_id
+                    )
             else:
                 logger.debug(f"File {file_path} unchanged - skipping processing")
             
