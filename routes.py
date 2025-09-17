@@ -681,7 +681,11 @@ def monitor_events():
                         'active_monitors': is_monitor_running()
                     }, 'heartbeat')
                 
-                time.sleep(2)  # Check for updates every 2 seconds
+                import threading
+                import time
+                # Use a non-blocking sleep to prevent worker timeouts
+                event = threading.Event()
+                event.wait(2)  # Non-blocking wait for 2 seconds
                 
             except GeneratorExit:
                 logger.info("Monitor events SSE connection closed")
