@@ -98,6 +98,13 @@ class MonitoredFileState(db.Model):
     last_error = db.Column(db.Text, nullable=True)
     records_processed = db.Column(db.Integer, nullable=False, default=0)
     
+    # Enhanced progress tracking fields
+    stage = db.Column(db.String(20), nullable=False, default='DETECTED')  # DETECTED, PROCESSING, COMPLETED, ERROR, SKIPPED
+    bytes_read = db.Column(db.BigInteger, nullable=False, default=0)
+    total_bytes = db.Column(db.BigInteger, nullable=False, default=0)
+    records_extracted = db.Column(db.Integer, nullable=False, default=0)
+    last_activity_at = db.Column(db.DateTime, nullable=True)
+    
     # Create unique constraint on folder_id + path
     __table_args__ = (
         Index('idx_folder_path', 'folder_id', 'path', unique=True),
@@ -120,3 +127,35 @@ class MonitorInstance(db.Model):
     
     def __repr__(self):
         return f'<MonitorInstance {self.id}: active={self.active}, process_id={self.process_id}>'
+
+
+class MonitorEvent(db.Model):
+    """Log of monitoring activities for real-time dashboard updates"""
+    __tablename__ = 'monitor_events'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    level = db.Column(db.String(10), nullable=False, default='INFO')  # DEBUG, INFO, WARNING, ERROR
+    event_type = db.Column(db.String(30), nullable=False)  # file_detected, file_processing, batch_complete, file_completed, error, heartbeat
+    folder_id = db.Column(db.Integer, db.ForeignKey('monitored_folders.id'), nullable=True)
+    file_id = db.Column(db.Integer, db.ForeignKey('monitored_file_states.id'), nullable=True)
+    file_path = db.Column(db.String(500), nullable=True)
+    message = db.Column(db.Text, nullable=False)
+    stage = db.Column(db.String(20), nullable=True)  # DETECTED, PROCESSING, COMPLETED, ERROR, SKIPPED
+    bytes_read = db.Column(db.BigInteger, nullable=True)
+    total_bytes = db.Column(db.BigInteger, nullable=True)
+    records_extracted = db.Column(db.Integer, nullable=True)
+    batch_no = db.Column(db.Integer, nullable=True)
+    error_detail = db.Column(db.Text, nullable=True)
+    worker_id = db.Column(db.String(100), nullable=True)
+    
+    # Create indexes for efficient queries
+    __table_args__ = (
+        Index('idx_monitor_events_created_at', 'created_at'),
+        Index('idx_monitor_events_file_id', 'file_id'),
+        Index('idx_monitor_events_level', 'level'),
+        Index('idx_monitor_events_type', 'event_type'),
+    )
+    
+    def __repr__(self):
+        return f'<MonitorEvent {self.event_type}: {self.message[:50]}...>'
