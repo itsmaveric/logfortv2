@@ -1,16 +1,80 @@
 import os
-from flask import render_template, request, redirect, url_for, flash, jsonify, session, send_file
+from flask import render_template, request, redirect, url_for, flash, jsonify, session, send_file, Response
 from werkzeug.utils import secure_filename
 from werkzeug.security import check_password_hash, generate_password_hash
 from functools import wraps
+from queue import Queue, Empty
+from collections import deque
+import json
+import time
+import threading
+from datetime import datetime, timedelta
 from app import app, db
-from models import ReflixTracking, LogFile, MonitoredFolder, MonitoredFileState, MonitorInstance
+from models import ReflixTracking, LogFile, MonitoredFolder, MonitoredFileState, MonitorInstance, MonitorEvent
 from log_parser import ReflixLogParser
 from folder_monitor import get_monitor, start_monitor, stop_monitor, is_monitor_running
 from error_logger import get_error_logger, log_error, log_warning, log_info, log_file_error, log_db_error
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Global event bus for real-time monitoring updates
+monitor_event_bus = deque(maxlen=1000)  # Keep last 1000 events in memory
+event_bus_lock = threading.Lock()
+
+def publish_monitor_event(event_type, message, **kwargs):
+    """Publish an event to the monitoring event bus and database"""
+    try:
+        # Create database record
+        event = MonitorEvent(
+            event_type=event_type,
+            message=message,
+            level=kwargs.get('level', 'INFO'),
+            folder_id=kwargs.get('folder_id'),
+            file_id=kwargs.get('file_id'),
+            file_path=kwargs.get('file_path'),
+            stage=kwargs.get('stage'),
+            bytes_read=kwargs.get('bytes_read'),
+            total_bytes=kwargs.get('total_bytes'),
+            records_extracted=kwargs.get('records_extracted'),
+            batch_no=kwargs.get('batch_no'),
+            error_detail=kwargs.get('error_detail'),
+            worker_id=kwargs.get('worker_id')
+        )
+        db.session.add(event)
+        db.session.commit()
+        
+        # Add to in-memory event bus for real-time updates
+        event_data = {
+            'id': event.id,
+            'timestamp': event.created_at.isoformat(),
+            'type': event_type,
+            'message': message,
+            'level': event.level,
+            'file_path': event.file_path,
+            'stage': event.stage,
+            'progress': {
+                'bytes_read': event.bytes_read,
+                'total_bytes': event.total_bytes,
+                'records_extracted': event.records_extracted,
+                'batch_no': event.batch_no
+            } if event.bytes_read is not None else None
+        }
+        
+        with event_bus_lock:
+            monitor_event_bus.append(event_data)
+        
+        logger.debug(f"Published monitor event: {event_type} - {message}")
+        
+    except Exception as e:
+        logger.error(f"Failed to publish monitor event: {e}")
+        db.session.rollback()
+
+def format_sse_message(data, event_type='message'):
+    """Format data as Server-Sent Events message"""
+    message = f"event: {event_type}\n"
+    message += f"data: {json.dumps(data)}\n\n"
+    return message
 
 ALLOWED_EXTENSIONS = {'log'}
 
@@ -486,6 +550,62 @@ def monitor_status():
                          folder_data=folder_data,
                          monitor_instance=monitor_instance,
                          is_running=is_monitor_running())
+
+@app.route('/monitor/events')
+@require_admin_auth
+def monitor_events():
+    """Server-Sent Events endpoint for real-time monitoring updates"""
+    def event_generator():
+        # Send initial connection event
+        yield format_sse_message({
+            'type': 'connected',
+            'timestamp': datetime.now().isoformat(),
+            'message': 'Connected to monitor events'
+        }, 'system')
+        
+        last_event_id = 0
+        while True:
+            try:
+                # Get new events from event bus
+                new_events = []
+                with event_bus_lock:
+                    for event in monitor_event_bus:
+                        if event.get('id', 0) > last_event_id:
+                            new_events.append(event)
+                            last_event_id = max(last_event_id, event.get('id', 0))
+                
+                # Send new events
+                for event in new_events:
+                    yield format_sse_message(event, event['type'])
+                
+                # Send periodic heartbeat
+                if len(new_events) == 0:
+                    yield format_sse_message({
+                        'type': 'heartbeat',
+                        'timestamp': datetime.now().isoformat(),
+                        'active_monitors': is_monitor_running()
+                    }, 'heartbeat')
+                
+                time.sleep(2)  # Check for updates every 2 seconds
+                
+            except GeneratorExit:
+                logger.info("Monitor events SSE connection closed")
+                break
+            except Exception as e:
+                logger.error(f"Error in monitor events stream: {e}")
+                yield format_sse_message({
+                    'type': 'error',
+                    'message': 'Error in event stream',
+                    'timestamp': datetime.now().isoformat()
+                }, 'error')
+                break
+    
+    return Response(event_generator(), mimetype='text/event-stream',
+                   headers={
+                       'Cache-Control': 'no-cache',
+                       'Connection': 'keep-alive',
+                       'Access-Control-Allow-Origin': '*'
+                   })
 
 @app.route('/monitor/settings', methods=['GET', 'POST'])
 @require_admin_auth
