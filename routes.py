@@ -25,6 +25,19 @@ event_bus_lock = threading.Lock()
 def publish_monitor_event(event_type, message, **kwargs):
     """Publish an event to the monitoring event bus and database"""
     try:
+        # Ensure we have an app context for background threads
+        if not app.app_context:
+            with app.app_context():
+                return _publish_monitor_event_with_context(event_type, message, **kwargs)
+        else:
+            return _publish_monitor_event_with_context(event_type, message, **kwargs)
+            
+    except Exception as e:
+        logger.error(f"Failed to publish monitor event: {e}")
+        
+def _publish_monitor_event_with_context(event_type, message, **kwargs):
+    """Internal function that publishes events with guaranteed app context"""
+    try:
         # Create database record
         event = MonitorEvent(
             event_type=event_type,
@@ -67,7 +80,7 @@ def publish_monitor_event(event_type, message, **kwargs):
         logger.debug(f"Published monitor event: {event_type} - {message}")
         
     except Exception as e:
-        logger.error(f"Failed to publish monitor event: {e}")
+        logger.error(f"Failed to publish monitor event during context execution: {e}")
         db.session.rollback()
 
 def format_sse_message(data, event_type='message'):
@@ -604,6 +617,7 @@ def monitor_events():
                    headers={
                        'Cache-Control': 'no-cache',
                        'Connection': 'keep-alive',
+                       'X-Accel-Buffering': 'no',  # Disable proxy buffering
                        'Access-Control-Allow-Origin': '*'
                    })
 
