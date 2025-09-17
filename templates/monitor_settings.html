@@ -18,9 +18,17 @@
                 <form method="POST">
                     <div class="mb-3">
                         <label for="folder_path" class="form-label">Folder Path</label>
-                        <input type="text" class="form-control" id="folder_path" name="folder_path" 
-                               placeholder="/path/to/log/folder" required>
-                        <div class="form-text">Enter the full path to the folder you want to monitor for new log files.</div>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="folder_path" name="folder_path" 
+                                   placeholder="\\server\share\folder or C:\local\folder" required>
+                            <button type="button" class="btn btn-outline-info" onclick="testNetworkPath()">
+                                <i class="fas fa-network-wired me-1"></i>Test Connection
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Enter the full path to monitor. For network folders, use UNC format: \\server\share\folder
+                        </div>
+                        <div id="connectionTestResult" class="mt-2" style="display:none;"></div>
                     </div>
                     <div class="mb-3 form-check">
                         <input type="checkbox" class="form-check-input" id="auto_process" name="auto_process" checked>
@@ -97,6 +105,71 @@
         </div>
     </div>
 </div>
+
+<script>
+function testNetworkPath() {
+    const pathInput = document.getElementById('folder_path');
+    const resultDiv = document.getElementById('connectionTestResult');
+    const path = pathInput.value.trim();
+    
+    if (!path) {
+        showTestResult('Please enter a folder path first', 'warning');
+        return;
+    }
+    
+    // Show loading
+    showTestResult('<i class="fas fa-spinner fa-spin me-1"></i>Testing connection...', 'info');
+    
+    // Send test request to server
+    fetch('/monitor/test-path', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            path: path
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showTestResult(
+                `<i class="fas fa-check-circle me-1"></i>Connection successful! ${data.message}`, 
+                'success'
+            );
+        } else {
+            let message = `<i class="fas fa-exclamation-triangle me-1"></i>Connection failed: ${data.error}`;
+            if (data.suggestions && data.suggestions.length > 0) {
+                message += '<br><strong>Suggestions:</strong><ul>';
+                data.suggestions.forEach(suggestion => {
+                    message += `<li>${suggestion}</li>`;
+                });
+                message += '</ul>';
+            }
+            showTestResult(message, 'danger');
+        }
+    })
+    .catch(error => {
+        showTestResult(
+            `<i class="fas fa-times-circle me-1"></i>Test failed: ${error.message}`, 
+            'danger'
+        );
+    });
+}
+
+function showTestResult(message, type) {
+    const resultDiv = document.getElementById('connectionTestResult');
+    resultDiv.innerHTML = `<div class="alert alert-${type}" role="alert">${message}</div>`;
+    resultDiv.style.display = 'block';
+    
+    // Auto-hide after 10 seconds for success messages
+    if (type === 'success') {
+        setTimeout(() => {
+            resultDiv.style.display = 'none';
+        }, 10000);
+    }
+}
+</script>
 {% endblock %}
 
 {% block scripts %}

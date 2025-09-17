@@ -53,10 +53,6 @@ externalPort = 4200
 localPort = 46241
 externalPort = 3001
 
-[[ports]]
-localPort = 46703
-externalPort = 5000
-
 [agent]
 integrations = ["styling_replit==1.0.0", "python_database==1.0.0"]
 expertMode = true

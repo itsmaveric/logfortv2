@@ -9,6 +9,7 @@ from typing import List, Optional
 from app import app, db
 from models import MonitoredFolder, MonitoredFileState, MonitorInstance
 from tail_parser import TailParser
+from network_drive_helper import create_network_drive_manager, NetworkFolderValidator
 
 logger = logging.getLogger(__name__)
 
@@ -290,7 +291,25 @@ class FolderMonitor:
     def _process_folder(self, folder: MonitoredFolder):
         """Process a single monitored folder."""
         try:
-            if not os.path.exists(folder.path):
+            # Check if it's a network path and needs authentication
+            if folder.path.startswith('\\\\'):
+                # It's a UNC path - validate network connectivity
+                diagnosis = NetworkFolderValidator.diagnose_path(folder.path)
+                if not diagnosis['accessible']:
+                    error_msg = f"Network folder not accessible: {folder.path}"
+                    if diagnosis['issues']:
+                        error_msg += f" Issues: {', '.join(diagnosis['issues'])}"
+                    logger.error(error_msg)
+                    
+                    # Publish network connection error event
+                    publish_event = get_event_publisher()
+                    publish_event('error', error_msg, 
+                                folder_id=folder.id, level='ERROR',
+                                error_detail=str(diagnosis))
+                    return
+                else:
+                    logger.info(f"Network folder accessible: {folder.path}")
+            elif not os.path.exists(folder.path):
                 logger.warning(f"Monitored folder does not exist: {folder.path}")
                 return
             
