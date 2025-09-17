@@ -442,7 +442,8 @@ def reference_detail(reference_number):
         shipping_units[unit_key].append(record)
     
     return render_template('reference_detail.html', 
-                         reference_number=reference_number,
+                         reference=reference_number,
+                         records=records,
                          shipping_units=shipping_units)
 
 @app.route('/files')

@@ -7,8 +7,8 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h1><i class="fas fa-info-circle me-2"></i>Reference Details</h1>
-                <p class="lead text-muted">{{ reference }}</p>
+                <h1><i class="fas fa-package me-2"></i>Order Details</h1>
+                <p class="lead text-primary">{{ reference }}</p>
             </div>
             <a href="{{ url_for('tracking') }}" class="btn btn-outline-secondary">
                 <i class="fas fa-arrow-left me-2"></i>Back to Search
@@ -17,12 +17,90 @@
     </div>
 </div>
 
-{% if records %}
+{% if shipping_units %}
+<!-- Status Timeline Overview -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-route me-2"></i>Order Journey Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Total Shipping Units:</strong> <span class="badge bg-primary">{{ shipping_units|length }}</span></p>
+                        <p><strong>Total Status Events:</strong> <span class="badge bg-info">{{ records|length }}</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>First Activity:</strong> {{ records[-1].timestamp.strftime('%Y-%m-%d %H:%M') if records else 'N/A' }}</p>
+                        <p><strong>Latest Activity:</strong> {{ records[0].timestamp.strftime('%Y-%m-%d %H:%M') if records else 'N/A' }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Shipping Units with Status Timelines -->
+{% for unit_key, unit_records in shipping_units.items() %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-box me-2"></i>
+                    {% if unit_key == 'main' %}
+                        Main Package
+                    {% else %}
+                        Shipping Unit: {{ unit_key }}
+                    {% endif %}
+                    <span class="badge bg-secondary ms-2">{{ unit_records|length }} events</span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Status Timeline -->
+                <div class="timeline">
+                    {% set unit_records_sorted = unit_records|sort(attribute='timestamp') %}
+                    {% for record in unit_records_sorted %}
+                    <div class="timeline-item">
+                        <div class="timeline-marker 
+                            {% if 'PREPARED' in record.status %}bg-secondary{% elif 'LABEL' in record.status %}bg-info{% elif 'ANNOUNCED' in record.status %}bg-warning{% elif 'TRANSIT' in record.status %}bg-primary{% elif 'DELIVER' in record.status %}bg-success{% else %}bg-dark{% endif %}">
+                            <i class="fas 
+                                {% if 'PREPARED' in record.status %}fa-cog
+                                {% elif 'LABEL' in record.status %}fa-print
+                                {% elif 'ANNOUNCED' in record.status %}fa-bullhorn
+                                {% elif 'TRANSIT' in record.status %}fa-truck
+                                {% elif 'DELIVER' in record.status %}fa-check-circle
+                                {% else %}fa-circle
+                                {% endif %}"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">{{ record.status.replace('_', ' ').title() }}</h6>
+                                <small class="text-muted">{{ record.timestamp.strftime('%Y-%m-%d %H:%M:%S') if record.timestamp else 'N/A' }}</small>
+                            </div>
+                            {% if record.description %}
+                            <p class="mb-1">{{ record.description }}</p>
+                            {% endif %}
+                            {% if record.location %}
+                            <p class="mb-0"><i class="fas fa-map-marker-alt me-1"></i>{{ record.location }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Detailed Records Table -->
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-timeline me-2"></i>Tracking History</h5>
+                <h5 class="mb-0"><i class="fas fa-table me-2"></i>Complete Event Log</h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -33,7 +111,7 @@
                                 <th>Status</th>
                                 <th>Description</th>
                                 <th>Location</th>
-                                <th>Shipping Unit Ref</th>
+                                <th>Shipping Unit</th>
                                 <th>Source File</th>
                             </tr>
                         </thead>
@@ -42,14 +120,21 @@
                             <tr>
                                 <td>{{ record.timestamp.strftime('%Y-%m-%d %H:%M:%S') if record.timestamp else 'N/A' }}</td>
                                 <td>
-                                    <span class="badge {% if 'deliver' in record.status.lower() %}bg-success{% elif 'transit' in record.status.lower() %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    <span class="badge 
+                                        {% if 'PREPARED' in record.status %}bg-secondary
+                                        {% elif 'LABEL' in record.status %}bg-info
+                                        {% elif 'ANNOUNCED' in record.status %}bg-warning
+                                        {% elif 'TRANSIT' in record.status %}bg-primary
+                                        {% elif 'DELIVER' in record.status %}bg-success
+                                        {% else %}bg-dark
+                                        {% endif %}">
                                         {{ record.status }}
                                     </span>
                                 </td>
                                 <td>{{ record.description or 'N/A' }}</td>
                                 <td>{{ record.location or 'N/A' }}</td>
-                                <td>{{ record.shipping_unit_reference or 'N/A' }}</td>
-                                <td><small class="text-muted">{{ record.log_filename or 'N/A' }}</small></td>
+                                <td>{{ record.shipping_unit_ref or 'N/A' }}</td>
+                                <td><small class="text-muted">{{ record.log_file_name or 'N/A' }}</small></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -78,6 +163,69 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+/* Timeline Styles */
+.timeline {
+    position: relative;
+    padding: 0;
+}
+
+.timeline-item {
+    position: relative;
+    padding-left: 60px;
+    padding-bottom: 30px;
+}
+
+.timeline-item:not(:last-child):before {
+    content: '';
+    position: absolute;
+    left: 25px;
+    top: 40px;
+    bottom: -30px;
+    width: 2px;
+    background: var(--bs-border-color);
+}
+
+.timeline-marker {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 18px;
+    border: 3px solid var(--bs-body-bg);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.timeline-content {
+    background: var(--bs-gray-100);
+    border-radius: 10px;
+    padding: 15px;
+    margin-top: 5px;
+    border-left: 4px solid var(--bs-primary);
+}
+
+[data-bs-theme="dark"] .timeline-content {
+    background: var(--bs-gray-800);
+    color: var(--bs-light);
+}
+
+.timeline-content h6 {
+    color: var(--bs-primary);
+    font-weight: 600;
+}
+
+.timeline-item:hover .timeline-content {
+    transform: translateX(5px);
+    transition: transform 0.2s ease;
+}
+</style>
+
 <script>
 $(document).ready(function() {
     $('#detailTable').DataTable({
