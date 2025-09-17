@@ -569,6 +569,41 @@ def monitor_status():
                          is_running=is_monitor_running(),
                          current_interval=current_interval)
 
+@app.route('/monitor/test-path', methods=['POST'])
+@require_admin_auth
+def test_network_path():
+    """Test network folder connectivity and provide diagnostics"""
+    try:
+        data = request.get_json()
+        path = data.get('path', '').strip()
+        
+        if not path:
+            return jsonify({'success': False, 'error': 'No path provided'})
+        
+        # Import the network helper
+        from network_drive_helper import NetworkFolderValidator
+        
+        # Run diagnostic on the path
+        diagnosis = NetworkFolderValidator.diagnose_path(path)
+        
+        if diagnosis['accessible']:
+            return jsonify({
+                'success': True,
+                'message': f'Path is accessible ({diagnosis["path"]})',
+                'diagnosis': diagnosis
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Path not accessible: {", ".join(diagnosis["issues"])}',
+                'suggestions': diagnosis.get('suggestions', []),
+                'diagnosis': diagnosis
+            })
+            
+    except Exception as e:
+        logger.error(f"Error testing network path: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
 @app.route('/monitor/update-interval', methods=['POST'])
 @require_admin_auth
 def update_monitoring_interval():
