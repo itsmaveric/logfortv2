@@ -159,3 +159,42 @@ class MonitorEvent(db.Model):
     
     def __repr__(self):
         return f'<MonitorEvent {self.event_type}: {self.message[:50]}...>'
+
+
+class MonitorSettings(db.Model):
+    """Global monitoring configuration settings"""
+    __tablename__ = 'monitor_settings'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    setting_name = db.Column(db.String(100), nullable=False, unique=True)
+    setting_value = db.Column(db.String(500), nullable=False)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    @classmethod
+    def get_monitoring_interval(cls):
+        """Get the global monitoring interval in minutes (default: 5 minutes)"""
+        setting = cls.query.filter_by(setting_name='monitoring_interval_minutes').first()
+        if setting:
+            try:
+                return int(setting.setting_value)
+            except (ValueError, TypeError):
+                return 5  # default fallback
+        return 5  # default if not set
+    
+    @classmethod
+    def set_monitoring_interval(cls, minutes):
+        """Set the global monitoring interval in minutes"""
+        setting = cls.query.filter_by(setting_name='monitoring_interval_minutes').first()
+        if setting:
+            setting.setting_value = str(minutes)
+            setting.updated_at = datetime.utcnow()
+        else:
+            setting = cls(
+                setting_name='monitoring_interval_minutes',
+                setting_value=str(minutes)
+            )
+            db.session.add(setting)
+        db.session.commit()
+    
+    def __repr__(self):
+        return f'<MonitorSettings {self.setting_name}: {self.setting_value}>'
