@@ -325,10 +325,9 @@ def upload_file():
                                 else:
                                     clean_data[key] = value
                             
-                            # Use logical event identity for proper deduplication across files
+                            # Use business logic unique key: reference_number + status + timestamp
                             existing = ReflixTracking.query.filter_by(
                                 reference_number=clean_data['reference_number'],
-                                shipping_unit_ref=clean_data['shipping_unit_ref'],
                                 status=clean_data['status'],
                                 timestamp=clean_data['timestamp']
                             ).first()
