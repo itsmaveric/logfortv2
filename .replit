@@ -50,12 +50,12 @@ localPort = 41797
 externalPort = 4200
 
 [[ports]]
-localPort = 46241
-externalPort = 3001
+localPort = 45657
+externalPort = 5000
 
 [[ports]]
-localPort = 46607
-externalPort = 5173
+localPort = 46241
+externalPort = 3001
 
 [agent]
 integrations = ["styling_replit==1.0.0", "python_database==1.0.0"]

@@ -259,12 +259,17 @@ class FolderMonitor:
                     # Clean up session at the end of each iteration
                     db.session.remove()
                     
-                # Sleep for polling interval (use minimum from all folders, default 10s)
-                if folders:
-                    min_interval = min(folder.polling_interval for folder in folders)
-                    sleep_time = max(min_interval, 1)  # At least 1 second
-                else:
-                    sleep_time = 10  # Default 10 seconds if no folders configured
+                # Sleep for global monitoring interval (in minutes)
+                try:
+                    from models import MonitorSettings
+                    global_interval_minutes = MonitorSettings.get_monitoring_interval()
+                    sleep_time = global_interval_minutes * 60  # Convert minutes to seconds
+                    sleep_time = max(sleep_time, 30)  # At least 30 seconds minimum
+                    
+                    logger.debug(f"Using global monitoring interval: {global_interval_minutes} minutes ({sleep_time} seconds)")
+                except Exception as e:
+                    logger.warning(f"Could not get monitoring interval, using default: {e}")
+                    sleep_time = 300  # Default 5 minutes if error
                 
                 # Sleep in smaller chunks to respond faster to stop signals
                 for _ in range(sleep_time):
