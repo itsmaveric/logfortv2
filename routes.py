@@ -559,10 +559,57 @@ def monitor_status():
             'file_count': len(file_states)
         })
     
+    # Get current monitoring interval
+    from models import MonitorSettings
+    current_interval = MonitorSettings.get_monitoring_interval()
+    
     return render_template('monitor_status.html', 
                          folder_data=folder_data,
                          monitor_instance=monitor_instance,
-                         is_running=is_monitor_running())
+                         is_running=is_monitor_running(),
+                         current_interval=current_interval)
+
+@app.route('/monitor/update-interval', methods=['POST'])
+@require_admin_auth
+def update_monitoring_interval():
+    """Update the global monitoring interval setting"""
+    try:
+        data = request.get_json()
+        interval = data.get('interval')
+        
+        if not interval or not isinstance(interval, int) or interval < 1 or interval > 1440:
+            return jsonify({'success': False, 'error': 'Invalid interval. Must be between 1 and 1440 minutes.'})
+        
+        # Save the new interval
+        from models import MonitorSettings
+        MonitorSettings.set_monitoring_interval(interval)
+        
+        # Restart monitor to use new interval if it's running
+        if is_monitor_running():
+            try:
+                stop_monitor()
+                time.sleep(2)  # Give it time to stop
+                start_monitor()
+                logger.info(f"Monitor restarted with new interval: {interval} minutes")
+                
+                # Publish event about interval change
+                publish_monitor_event(
+                    'system',
+                    f'Monitoring interval updated to {interval} minutes. Monitor restarted.',
+                    level='INFO'
+                )
+            except Exception as e:
+                logger.warning(f"Could not restart monitor after interval change: {e}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Monitoring interval updated to {interval} minutes',
+            'interval': interval
+        })
+        
+    except Exception as e:
+        logger.error(f"Error updating monitoring interval: {e}")
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/monitor/events')
 @require_admin_auth

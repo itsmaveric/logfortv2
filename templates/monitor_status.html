@@ -15,6 +15,49 @@
                 </span>
             </div>
         </div>
+        
+        <!-- Timer Settings Panel -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Monitoring Timer Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="timerSettingsForm" class="row g-3">
+                            <div class="col-md-4">
+                                <label for="monitoringInterval" class="form-label">
+                                    <i class="fas fa-stopwatch me-1"></i>Monitoring Interval
+                                </label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="monitoringInterval" 
+                                           value="{{ current_interval or 5 }}" min="1" max="1440"
+                                           placeholder="5">
+                                    <span class="input-group-text">minutes</span>
+                                </div>
+                                <div class="form-text">
+                                    How often the monitor should check for new log files (1-1440 minutes)
+                                </div>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary me-2">
+                                    <i class="fas fa-save me-1"></i>Save Settings
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" onclick="resetToDefault()">
+                                    <i class="fas fa-undo me-1"></i>Reset Default
+                                </button>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-center">
+                                <div id="timerStatus" class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Current: Every <span id="currentIntervalDisplay">{{ current_interval or 5 }}</span> minutes
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -411,6 +454,77 @@ document.getElementById('pauseUpdates').addEventListener('click', function() {
         this.className = 'btn btn-sm btn-outline-warning';
         connectToEvents();
     }
+});
+
+// Timer Settings Functions
+function resetToDefault() {
+    document.getElementById('monitoringInterval').value = '5';
+    document.getElementById('currentIntervalDisplay').textContent = '5';
+}
+
+// Handle timer settings form submission
+document.getElementById('timerSettingsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const intervalInput = document.getElementById('monitoringInterval');
+    const interval = parseInt(intervalInput.value);
+    
+    if (interval < 1 || interval > 1440) {
+        alert('Please enter a valid interval between 1 and 1440 minutes.');
+        return;
+    }
+    
+    // Show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+    submitBtn.disabled = true;
+    
+    // Send to server
+    fetch('/monitor/update-interval', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            interval: interval
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update display
+            document.getElementById('currentIntervalDisplay').textContent = interval;
+            
+            // Show success message
+            const statusDiv = document.getElementById('timerStatus');
+            statusDiv.innerHTML = `
+                <i class="fas fa-check-circle me-1 text-success"></i>
+                Settings saved! Monitor will restart with new interval: Every <span>${interval}</span> minutes
+            `;
+            statusDiv.className = 'text-success';
+            
+            // Revert to normal after 3 seconds
+            setTimeout(() => {
+                statusDiv.innerHTML = `
+                    <i class="fas fa-info-circle me-1"></i>
+                    Current: Every <span id="currentIntervalDisplay">${interval}</span> minutes
+                `;
+                statusDiv.className = 'text-muted';
+            }, 3000);
+        } else {
+            alert('Error saving settings: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error saving settings. Please try again.');
+    })
+    .finally(() => {
+        // Restore button
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
 });
 
 // Initialize on page load
